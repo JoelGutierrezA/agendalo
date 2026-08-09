@@ -1,0 +1,10 @@
+agendalo_front/node_modules/
+agendalo_front/dist/
+agendalo_front/.angular/
+
+agendalo_back/vendor/
+agendalo_back/storage/logs/
+agendalo_back/.env
+
+.DS_Store
+Thumbs.db
