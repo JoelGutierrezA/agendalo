@@ -1,11 +1,14 @@
-import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../../../environments/environment';
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
+import { ToastService } from '../../../../core/services/toast.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
+import { BusinessService } from '../../../settings/services/business.service';
 
 interface Service {
   id: number;
+  business_id: number;
   name: string;
   description: string | null;
   duration_minutes: number;
@@ -13,10 +16,6 @@ interface Service {
   is_active: boolean;
 }
 
-import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
-import { ToastService } from '../../../../core/services/toast.service';
-
-/** Gestión de servicios del negocio */
 @Component({
   selector: 'app-services-list',
   standalone: true,
@@ -30,59 +29,38 @@ import { ToastService } from '../../../../core/services/toast.service';
         </button>
       </div>
 
-      <!-- Estado de carga -->
       @if (loading) {
-        <div class="card p-0 overflow-hidden">
-          <table class="w-full text-sm text-left">
-            <thead class="bg-gray-50/50 border-b border-border">
-              <tr>
-                <th class="px-5 py-3 h-10 w-48"><div class="skeleton h-4 w-32"></div></th>
-                <th class="px-5 py-3 h-10 hidden sm:table-cell"><div class="skeleton h-4 w-20"></div></th>
-                <th class="px-5 py-3 h-10 hidden sm:table-cell"><div class="skeleton h-4 w-20"></div></th>
-                <th class="px-5 py-3 h-10 text-center"><div class="skeleton h-4 w-12 mx-auto"></div></th>
-                <th class="px-5 py-3 h-10 text-right"><div class="skeleton h-4 w-24 ml-auto"></div></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (i of [1,2,3,4]; track i) {
-                <tr>
-                  <td class="px-5 py-4"><div class="skeleton-text w-40"></div><div class="skeleton-text w-56 h-3 mt-2"></div></td>
-                  <td class="px-5 py-4 hidden sm:table-cell"><div class="skeleton-text w-16"></div></td>
-                  <td class="px-5 py-4 hidden sm:table-cell"><div class="skeleton-text w-20"></div></td>
-                  <td class="px-5 py-4 text-center"><div class="skeleton w-16 h-6 rounded-full mx-auto"></div></td>
-                  <td class="px-5 py-4 text-right"><div class="skeleton w-24 h-8 rounded-lg ml-auto"></div></td>
-                </tr>
-              }
-            </tbody>
-          </table>
+        <div class="card">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-text"></div>
+          <div class="skeleton-text"></div>
+          <div class="skeleton-text"></div>
         </div>
       }
 
-      <!-- Estado vacío -->
       @if (!loading && services.length === 0) {
         <app-empty-state
-          icon="✂️"
+          icon="+"
           title="No hay servicios configurados"
-          description="Crea los servicios que ofreces para que aparezcan en tu página de reservas"
+          description="Crea los servicios que ofreces para que aparezcan en tu pagina de reservas"
           actionLabel="Crear primer servicio"
           (onAction)="openModal()"
         ></app-empty-state>
       }
 
-      <!-- Lista de servicios -->
       @if (!loading && services.length > 0) {
         <div class="card p-0 overflow-hidden">
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-border bg-gray-50/50">
                 <th class="text-left px-5 py-3 text-text-secondary font-medium">Servicio</th>
-                <th class="text-left px-5 py-3 text-text-secondary font-medium hidden sm:table-cell">Duración</th>
+                <th class="text-left px-5 py-3 text-text-secondary font-medium hidden sm:table-cell">Duracion</th>
                 <th class="text-left px-5 py-3 text-text-secondary font-medium hidden sm:table-cell">Precio</th>
                 <th class="text-center px-5 py-3 text-text-secondary font-medium">Estado</th>
                 <th class="text-right px-5 py-3 text-text-secondary font-medium">Acciones</th>
               </tr>
             </thead>
-            <tbody class="fade-in">
+            <tbody>
               @for (service of services; track service.id) {
                 <tr class="border-b border-border last:border-0 hover:bg-gray-50/50 transition-colors">
                   <td class="px-5 py-3.5">
@@ -113,14 +91,12 @@ import { ToastService } from '../../../../core/services/toast.service';
                     <div class="flex items-center justify-end gap-2">
                       <button
                         (click)="openModal(service)"
-                        class="p-1.5 rounded-lg text-text-secondary hover:text-primary hover:bg-primary-light transition-colors"
-                        title="Editar"
-                      >✏️</button>
+                        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-gray-50"
+                      >Editar</button>
                       <button
                         (click)="confirmDelete(service)"
-                        class="p-1.5 rounded-lg text-text-secondary hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Eliminar"
-                      >🗑️</button>
+                        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50"
+                      >Eliminar</button>
                     </div>
                   </td>
                 </tr>
@@ -131,15 +107,14 @@ import { ToastService } from '../../../../core/services/toast.service';
       }
     </div>
 
-    <!-- Modal crear/editar -->
     @if (showModal) {
       <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" (click)="closeModal()">
-        <div class="bg-surface rounded-2xl shadow-xl w-full max-w-md" (click)="$event.stopPropagation()">
+        <div class="bg-surface rounded-lg shadow-xl w-full max-w-md" (click)="$event.stopPropagation()">
           <div class="px-6 py-5 border-b border-border flex items-center justify-between">
             <h2 class="text-lg font-semibold text-text-primary">
               {{ editingId ? 'Editar servicio' : 'Nuevo servicio' }}
             </h2>
-            <button (click)="closeModal()" class="text-text-secondary hover:text-text-primary text-xl leading-none">✕</button>
+            <button (click)="closeModal()" class="text-text-secondary hover:text-text-primary text-xl leading-none">x</button>
           </div>
 
           <form [formGroup]="form" (ngSubmit)="onSubmit()" class="px-6 py-5 space-y-4">
@@ -152,32 +127,31 @@ import { ToastService } from '../../../../core/services/toast.service';
             </div>
 
             <div>
-              <label class="form-label">Descripción</label>
-              <textarea formControlName="description" class="form-input" rows="2" placeholder="Descripción opcional del servicio..."></textarea>
+              <label class="form-label">Descripcion</label>
+              <textarea formControlName="description" class="form-input" rows="2" placeholder="Descripcion opcional del servicio"></textarea>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="form-label">Duración (min) *</label>
-                <input type="number" formControlName="duration_minutes" class="form-input" placeholder="30" min="5" max="480" />
+                <label class="form-label">Duracion (min) *</label>
+                <input type="number" formControlName="duration_minutes" class="form-input" min="5" max="480" />
                 @if (form.get('duration_minutes')?.invalid && form.get('duration_minutes')?.touched) {
                   <p class="form-error">Entre 5 y 480 min</p>
                 }
               </div>
               <div>
                 <label class="form-label">Precio (CLP) *</label>
-                <input type="number" formControlName="price" class="form-input" placeholder="15000" min="0" step="500" />
+                <input type="number" formControlName="price" class="form-input" min="0" step="500" />
                 @if (form.get('price')?.invalid && form.get('price')?.touched) {
                   <p class="form-error">Precio requerido</p>
                 }
               </div>
             </div>
 
-            <div class="flex items-center gap-3">
-              <input type="checkbox" formControlName="is_active" id="is_active" class="w-4 h-4 accent-primary" />
-              <label for="is_active" class="text-sm text-text-primary cursor-pointer">Servicio activo (visible para clientes)</label>
-            </div>
-
+            <label class="flex items-center gap-3 text-sm text-text-primary cursor-pointer">
+              <input type="checkbox" formControlName="is_active" class="w-4 h-4 accent-primary" />
+              Servicio activo
+            </label>
 
             <div class="flex items-center justify-end gap-3 pt-2">
               <button type="button" (click)="closeModal()" class="btn-secondary">Cancelar</button>
@@ -190,21 +164,23 @@ import { ToastService } from '../../../../core/services/toast.service';
       </div>
     }
 
-    <!-- Modal confirmación eliminación -->
     @if (deletingService) {
       <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-surface rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div class="bg-surface rounded-lg shadow-xl w-full max-w-sm p-6">
           <div class="text-center mb-4">
-            <span class="text-4xl">⚠️</span>
-            <h3 class="text-lg font-semibold text-text-primary mt-3">¿Eliminar servicio?</h3>
+            <h3 class="text-lg font-semibold text-text-primary">Eliminar servicio</h3>
             <p class="text-text-secondary text-sm mt-1">
-              Vas a eliminar <strong>{{ deletingService.name }}</strong>. Esta acción no se puede deshacer.
+              Vas a eliminar <strong>{{ deletingService.name }}</strong>. Esta accion no se puede deshacer.
             </p>
           </div>
           <div class="flex gap-3">
             <button (click)="deletingService = null" class="btn-secondary flex-1">Cancelar</button>
-            <button (click)="deleteService()" class="flex-1 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors" [disabled]="submitting">
-              @if (submitting) { Eliminando... } @else { Sí, eliminar }
+            <button
+              (click)="deleteService()"
+              class="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+              [disabled]="submitting"
+            >
+              @if (submitting) { Eliminando... } @else { Eliminar }
             </button>
           </div>
         </div>
@@ -213,10 +189,8 @@ import { ToastService } from '../../../../core/services/toast.service';
   `,
 })
 export class ServicesListComponent implements OnInit {
-  private readonly apiUrl = `${environment.apiUrl}/services`;
-
   services: Service[] = [];
-  loading   = true;
+  loading = true;
   showModal = false;
   editingId: number | null = null;
   deletingService: Service | null = null;
@@ -225,16 +199,17 @@ export class ServicesListComponent implements OnInit {
   form: FormGroup;
 
   constructor(
-    private http: HttpClient,
     private fb: FormBuilder,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private businessService: BusinessService,
+    private supabase: SupabaseService
   ) {
     this.form = this.fb.group({
-      name:             ['', [Validators.required, Validators.maxLength(255)]],
-      description:      [''],
+      name: ['', [Validators.required, Validators.maxLength(255)]],
+      description: [''],
       duration_minutes: [30, [Validators.required, Validators.min(5), Validators.max(480)]],
-      price:            [0,  [Validators.required, Validators.min(0)]],
-      is_active:        [true],
+      price: [0, [Validators.required, Validators.min(0)]],
+      is_active: [true],
     });
   }
 
@@ -243,21 +218,41 @@ export class ServicesListComponent implements OnInit {
   }
 
   loadServices(): void {
+    const business = this.businessService.currentBusiness();
+
+    if (!business) {
+      this.loading = false;
+      this.toastService.error('No hay un negocio seleccionado');
+      return;
+    }
+
     this.loading = true;
-    this.http.get<{ data: Service[] }>(this.apiUrl).subscribe({
-      next: (res) => { this.services = res.data ?? []; this.loading = false; },
-      error: () => { this.loading = false; }
-    });
+
+    void this.supabase.client
+      .from('services')
+      .select('*')
+      .eq('business_id', business.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          this.toastService.error(error.message);
+          this.loading = false;
+          return;
+        }
+
+        this.services = (data ?? []).map(service => this.mapService(service));
+        this.loading = false;
+      });
   }
 
   openModal(service?: Service): void {
-    this.editingId  = service?.id ?? null;
+    this.editingId = service?.id ?? null;
     this.form.reset({
-      name:             service?.name ?? '',
-      description:      service?.description ?? '',
+      name: service?.name ?? '',
+      description: service?.description ?? '',
       duration_minutes: service?.duration_minutes ?? 30,
-      price:            service?.price ?? 0,
-      is_active:        service?.is_active ?? true,
+      price: service?.price ?? 0,
+      is_active: service?.is_active ?? true,
     });
     this.showModal = true;
   }
@@ -268,37 +263,80 @@ export class ServicesListComponent implements OnInit {
   }
 
   onSubmit(): void {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const business = this.businessService.currentBusiness();
+    if (!business) {
+      this.toastService.error('No hay un negocio seleccionado');
+      return;
+    }
+
     this.submitting = true;
 
-    const payload = this.form.value;
-    const request = this.editingId
-      ? this.http.put<{ data: Service }>(`${this.apiUrl}/${this.editingId}`, payload)
-      : this.http.post<{ data: Service }>(this.apiUrl, payload);
+    const payload = {
+      business_id: business.id,
+      name: this.form.value.name,
+      description: this.form.value.description || null,
+      duration_minutes: Number(this.form.value.duration_minutes),
+      price: Number(this.form.value.price),
+      is_active: Boolean(this.form.value.is_active),
+    };
 
-    request.subscribe({
-      next: () => {
+    const request = this.editingId
+      ? this.supabase.client
+          .from('services')
+          .update(payload)
+          .eq('id', this.editingId)
+          .eq('business_id', business.id)
+          .select('*')
+          .single()
+      : this.supabase.client
+          .from('services')
+          .insert(payload)
+          .select('*')
+          .single();
+
+    void request.then(({ error }) => {
+      if (error) {
+        this.toastService.error(error.message);
         this.submitting = false;
-        this.toastService.success(this.editingId ? 'Servicio actualizado' : 'Servicio creado con éxito');
-        this.closeModal();
-        this.loadServices();
-      },
-      error: () => {
-        this.submitting = false;
+        return;
       }
+
+      this.toastService.success(this.editingId ? 'Servicio actualizado' : 'Servicio creado con exito');
+      this.submitting = false;
+      this.closeModal();
+      this.loadServices();
     });
   }
 
   toggleActive(service: Service): void {
-    this.http.patch<{ data: Service }>(`${this.apiUrl}/${service.id}/toggle-active`, {}).subscribe({
-      next: (res) => {
-        const idx = this.services.findIndex(s => s.id === service.id);
-        if (idx !== -1 && res.data) { 
-          this.services[idx] = res.data;
-          this.toastService.info(`Servicio ${res.data.is_active ? 'activado' : 'desactivado'}`);
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    void this.supabase.client
+      .from('services')
+      .update({ is_active: !service.is_active })
+      .eq('id', service.id)
+      .eq('business_id', business.id)
+      .select('*')
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          this.toastService.error(error.message);
+          return;
         }
-      }
-    });
+
+        const idx = this.services.findIndex(item => item.id === service.id);
+        if (idx !== -1 && data) {
+          const updated = this.mapService(data);
+          this.services[idx] = updated;
+          this.toastService.info(`Servicio ${updated.is_active ? 'activado' : 'desactivado'}`);
+        }
+      });
   }
 
   confirmDelete(service: Service): void {
@@ -306,16 +344,39 @@ export class ServicesListComponent implements OnInit {
   }
 
   deleteService(): void {
-    if (!this.deletingService) return;
+    const business = this.businessService.currentBusiness();
+    if (!this.deletingService || !business) return;
+
     this.submitting = true;
-    this.http.delete(`${this.apiUrl}/${this.deletingService.id}`).subscribe({
-      next: () => {
-        this.services = this.services.filter(s => s.id !== this.deletingService?.id);
+
+    void this.supabase.client
+      .from('services')
+      .delete()
+      .eq('id', this.deletingService.id)
+      .eq('business_id', business.id)
+      .then(({ error }) => {
+        if (error) {
+          this.toastService.error(error.message);
+          this.submitting = false;
+          return;
+        }
+
+        this.services = this.services.filter(service => service.id !== this.deletingService?.id);
         this.toastService.success('Servicio eliminado');
         this.deletingService = null;
         this.submitting = false;
-      },
-      error: () => { this.submitting = false; }
-    });
+      });
+  }
+
+  private mapService(row: any): Service {
+    return {
+      id: row.id,
+      business_id: row.business_id,
+      name: row.name,
+      description: row.description,
+      duration_minutes: row.duration_minutes,
+      price: Number(row.price),
+      is_active: row.is_active,
+    };
   }
 }

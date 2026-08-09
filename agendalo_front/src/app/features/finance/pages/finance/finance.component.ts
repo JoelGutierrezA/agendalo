@@ -1,21 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { environment } from '../../../../../environments/environment';
-
-interface Income {
-  id: number; description: string; amount: string; recorded_at: string; notes: string | null;
-}
-interface Expense {
-  id: number; category_id: number; description: string; amount: string; recorded_at: string;
-  category?: ExpenseCategory;
-}
-interface ExpenseCategory {
-  id: number; name: string; is_active: boolean;
-}
-
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
+import { BusinessService } from '../../../settings/services/business.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
+
+interface ExpenseCategory {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
 
 @Component({
   selector: 'app-finance',
@@ -33,7 +27,6 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
         </div>
       </div>
 
-      <!-- KPIs Financieros -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         @for (kpi of kpis; track kpi.label) {
           <div class="kpi-card relative overflow-hidden">
@@ -52,7 +45,6 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
         }
       </div>
 
-      <!-- Tabs -->
       <div class="flex gap-1 mb-4 border-b border-border">
         @for (tab of tabs; track tab) {
           <button
@@ -63,14 +55,13 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
         }
       </div>
 
-      <!-- Contenido de Transacciones -->
       <div class="card p-0 overflow-hidden">
         <div class="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-gray-50/50">
           <h3 class="font-bold text-text-primary text-lg">Historial de {{ activeTab }}</h3>
-          
+
           <div class="flex gap-2">
             @if (activeTab === 'Egresos') {
-              <button class="btn-secondary btn-sm" (click)="openCategoryModal()">Categorías</button>
+              <button class="btn-secondary btn-sm" (click)="openCategoryModal()">Categorias</button>
             }
             <button class="btn-primary btn-sm" (click)="openTransactionModal()">
               + Registrar {{ activeTab === 'Ingresos' ? 'Ingreso' : 'Egreso' }}
@@ -80,30 +71,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
 
         <div class="overflow-x-auto min-h-[300px]">
           @if (loadingTable) {
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm text-left">
-                <thead class="bg-white border-b border-border">
-                  <tr>
-                    <th class="px-5 py-3 h-10 w-32"><div class="skeleton h-4 w-20"></div></th>
-                    <th class="px-5 py-3 h-10"><div class="skeleton h-4 w-48"></div></th>
-                    @if (activeTab === 'Egresos') { <th class="px-5 py-3 h-10 w-32"><div class="skeleton h-4 w-24"></div></th> }
-                    <th class="px-5 py-3 h-10 text-right"><div class="skeleton h-4 w-16 ml-auto"></div></th>
-                    <th class="px-5 py-3 h-10 w-20"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (i of [1,2,3,4]; track i) {
-                    <tr>
-                      <td class="px-5 py-4"><div class="skeleton-text w-24"></div></td>
-                      <td class="px-5 py-4"><div class="skeleton-text w-48"></div><div class="skeleton-text w-32 h-3 mt-2"></div></td>
-                      @if (activeTab === 'Egresos') { <td class="px-5 py-4"><div class="skeleton w-20 h-6 rounded-full"></div></td> }
-                      <td class="px-5 py-4 text-right"><div class="skeleton-text w-20 ml-auto"></div></td>
-                      <td class="px-5 py-4 text-right"><div class="skeleton-circle w-6 h-6 ml-auto"></div></td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+            <div class="py-16 text-center text-text-secondary animate-pulse">Cargando movimientos...</div>
           } @else if (listData.length === 0) {
             <app-empty-state
               [icon]="activeTab === 'Ingresos' ? '💰' : '📉'"
@@ -117,8 +85,10 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
               <thead class="bg-white border-b border-border text-text-secondary">
                 <tr>
                   <th class="px-5 py-3 font-medium">Fecha</th>
-                  <th class="px-5 py-3 font-medium">Descripción</th>
-                  @if (activeTab === 'Egresos') { <th class="px-5 py-3 font-medium">Categoría</th> }
+                  <th class="px-5 py-3 font-medium">Descripcion</th>
+                  @if (activeTab === 'Egresos') {
+                    <th class="px-5 py-3 font-medium">Categoria</th>
+                  }
                   <th class="px-5 py-3 font-medium text-right">Monto</th>
                   <th class="px-5 py-3 font-medium text-right w-20">Acciones</th>
                 </tr>
@@ -129,7 +99,9 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
                     <td class="px-5 py-3 text-text-primary font-medium">{{ item.recorded_at | date:'dd MMM yyyy' }}</td>
                     <td class="px-5 py-3 text-text-secondary">
                       {{ item.description }}
-                      @if(item.notes) { <span class="text-xs text-gray-400 block truncate max-w-xs">{{item.notes}}</span> }
+                      @if(item.notes) {
+                        <span class="text-xs text-gray-400 block truncate max-w-xs">{{ item.notes }}</span>
+                      }
                     </td>
                     @if (activeTab === 'Egresos') {
                       <td class="px-5 py-3">
@@ -143,7 +115,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
                     </td>
                     <td class="px-5 py-3 text-right">
                       <button class="text-text-secondary hover:text-red-500 transition-colors" (click)="deleteTransaction(item.id)">
-                        🗑️
+                        Eliminar
                       </button>
                     </td>
                   </tr>
@@ -153,8 +125,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
           }
         </div>
       </div>
-      
-      <!-- MODAL TRANSACCION -->
+
       @if (showTxModal) {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
@@ -162,9 +133,8 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
               <h3 class="text-lg font-bold text-text-primary">Registrar {{ activeTab.slice(0, -1) }}</h3>
               <button (click)="closeModals()" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-2 leading-none">&times;</button>
             </div>
-            
+
             <form [formGroup]="txForm" (ngSubmit)="saveTransaction()" class="p-6 space-y-4">
-              
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="form-label">Monto (CLP) *</label>
@@ -177,13 +147,13 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
               </div>
 
               <div>
-                <label class="form-label">Descripción breve *</label>
-                <input type="text" formControlName="description" class="form-input" placeholder="Ej: Pago de cliente, Insumos, etc." />
+                <label class="form-label">Descripcion breve *</label>
+                <input type="text" formControlName="description" class="form-input" placeholder="Ej: Pago de cliente, insumos, etc." />
               </div>
 
               @if (activeTab === 'Egresos') {
                 <div>
-                  <label class="form-label">Categoría *</label>
+                  <label class="form-label">Categoria *</label>
                   <div class="flex gap-2">
                     <select formControlName="category_id" class="form-input flex-1">
                       <option value="">Seleccione...</option>
@@ -191,14 +161,14 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
                         <option [value]="cat.id">{{ cat.name }}</option>
                       }
                     </select>
-                    <button type="button" class="btn-secondary px-3" (click)="openCategoryModal()" title="Gestionar categorías">⚙️</button>
+                    <button type="button" class="btn-secondary px-3" (click)="openCategoryModal()" title="Gestionar categorias">+</button>
                   </div>
                 </div>
               }
 
               <div>
-                <label class="form-label">Notas adicionales (Opcional)</label>
-                <textarea formControlName="notes" class="form-input" rows="2" placeholder="Detalles de la factura, medio de pago..."></textarea>
+                <label class="form-label">Notas adicionales</label>
+                <textarea formControlName="notes" class="form-input" rows="2" placeholder="Detalles de factura, medio de pago..."></textarea>
               </div>
 
               <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-border">
@@ -210,23 +180,20 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
         </div>
       }
 
-      <!-- MODAL CATEGORIAS -->
       @if (showCatModal) {
         <div class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
             <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-              <h3 class="font-bold">Categorías de Egresos</h3>
+              <h3 class="font-bold">Categorias de Egresos</h3>
               <button (click)="showCatModal = false" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
-            
+
             <div class="p-6">
-              <!-- Crear nueva -->
               <div class="flex gap-2 mb-6">
-                <input type="text" [(ngModel)]="newCatName" class="form-input flex-1" placeholder="Nueva categoría..." />
-                <button class="btn-primary" (click)="saveCategory()" [disabled]="!newCatName.trim() || saving">Añadir</button>
+                <input type="text" [(ngModel)]="newCatName" class="form-input flex-1" placeholder="Nueva categoria..." />
+                <button class="btn-primary" (click)="saveCategory()" [disabled]="!newCatName.trim() || saving">Anadir</button>
               </div>
 
-              <!-- Lista -->
               <div class="border border-border rounded-lg max-h-60 overflow-y-auto">
                 <ul class="divide-y divide-border">
                   @for (cat of categories; track cat.id) {
@@ -236,7 +203,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
                     </li>
                   }
                   @if (categories.length === 0) {
-                    <li class="p-4 text-center text-sm text-gray-500">Agrega tu primera categoría. Ej: Arriendo, Insumos.</li>
+                    <li class="p-4 text-center text-sm text-gray-500">Agrega tu primera categoria. Ej: Arriendo, Insumos.</li>
                   }
                 </ul>
               </div>
@@ -258,26 +225,27 @@ export class FinanceComponent implements OnInit {
 
   listData: any[] = [];
   categories: ExpenseCategory[] = [];
-  
-  // KPIs
+
   kpis = [
     { id: 'income', label: 'Total ingresos', value: 0, icon: '💰', bg: '#F0FDF4', textColor: 'text-success' },
     { id: 'expense', label: 'Total egresos', value: 0, icon: '📉', bg: '#FEF2F2', textColor: 'text-danger' },
-    { id: 'balance', label: 'Balance Neto', value: 0, icon: '📊', bg: '#EFF6FF', textColor: 'text-primary' },
+    { id: 'balance', label: 'Balance neto', value: 0, icon: '📊', bg: '#EFF6FF', textColor: 'text-primary' },
   ];
 
-  // State
   loadingKpis = false;
   loadingTable = false;
   showTxModal = false;
   showCatModal = false;
   saving = false;
 
-  // Forms
   txForm: FormGroup;
   newCatName = '';
 
-  constructor(private http: HttpClient, private fb: FormBuilder) {
+  constructor(
+    private fb: FormBuilder,
+    private businessService: BusinessService,
+    private supabase: SupabaseService
+  ) {
     this.txForm = this.fb.group({
       amount: ['', [Validators.required, Validators.min(1)]],
       recorded_at: [new Date().toISOString().split('T')[0], Validators.required],
@@ -288,134 +256,238 @@ export class FinanceComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadData();
-    this.loadCategories();
+    void this.loadData();
+    void this.loadCategories();
   }
 
-  // Carga Maestra
-  loadData() {
-    this.loadKpis();
-    this.loadActiveTabData();
+  async loadData(): Promise<void> {
+    await Promise.all([
+      this.loadKpis(),
+      this.loadActiveTabData(),
+    ]);
   }
 
-  loadActiveTabData() {
+  async loadActiveTabData(): Promise<void> {
     this.loadingTable = true;
-    const endpoint = this.activeTab === 'Ingresos' ? 'income' : 'expenses';
-    const params = this.getPeriodParams();
-    
-    this.http.get<any>(`${environment.apiUrl}/finance/${endpoint}`, { params: params as any }).subscribe({
-      next: (res: any) => {
-        this.listData = res.data.data;
-        this.loadingTable = false;
-      },
-      error: () => this.loadingTable = false
-    });
+    const business = this.businessService.currentBusiness();
+    if (!business) {
+      this.loadingTable = false;
+      return;
+    }
+
+    try {
+      const table = this.activeTab === 'Ingresos' ? 'income_records' : 'expense_records';
+      const select = this.activeTab === 'Ingresos' ? '*' : '*, category:expense_categories(*)';
+      let query = this.supabase.client
+        .from(table)
+        .select(select)
+        .eq('business_id', business.id)
+        .order('recorded_at', { ascending: false })
+        .order('id', { ascending: false });
+
+      const period = this.getPeriodParams();
+      if (period.start_date) query = query.gte('recorded_at', period.start_date);
+      if (period.end_date) query = query.lte('recorded_at', period.end_date);
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+
+      this.listData = (data ?? []).map((row: any) => ({
+        ...row,
+        amount: Number(row.amount ?? 0),
+        category: Array.isArray(row.category) ? row.category[0] : row.category,
+      }));
+    } catch (error: any) {
+      alert(error?.message ?? 'No se pudieron cargar los movimientos.');
+    } finally {
+      this.loadingTable = false;
+    }
   }
 
-  // Dashboard de KPIs en backend (Reutilizado del DashboardController o simulado sumando)
-  loadKpis() {
+  async loadKpis(): Promise<void> {
     this.loadingKpis = true;
-    const params = this.getPeriodParams();
-    
-    // Obtenemos del summary global del Dashboard
-    this.http.get<any>(`${environment.apiUrl}/dashboard/summary`, { params: params as any }).subscribe({
-      next: (res) => {
-         const data = res.data;
-         const income = data?.kpis?.monthly_income ?? data?.total_revenue ?? 0;
-         const expenses = data?.kpis?.monthly_expenses ?? data?.total_expenses ?? 0;
+    const business = this.businessService.currentBusiness();
+    if (!business) {
+      this.loadingKpis = false;
+      return;
+    }
 
-         this.kpis[0].value = income;
-         this.kpis[1].value = expenses;
-         this.kpis[2].value = income - expenses;
-         this.loadingKpis = false;
-      },
-      error: () => this.loadingKpis = false
-    });
+    try {
+      const [income, expenses] = await Promise.all([
+        this.sumTable('income_records', business.id),
+        this.sumTable('expense_records', business.id),
+      ]);
+
+      this.kpis[0].value = income;
+      this.kpis[1].value = expenses;
+      this.kpis[2].value = income - expenses;
+    } finally {
+      this.loadingKpis = false;
+    }
   }
 
-  getPeriodParams() {
+  getPeriodParams(): { start_date?: string; end_date?: string } {
     if (this.period === 'all') return {};
     const date = new Date();
     const firstDay = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
     const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
-    return { start_date: firstDay, end_date: lastDay } as any;
+    return { start_date: firstDay, end_date: lastDay };
   }
 
-  // --- TRANSACCIONES ---
-  openTransactionModal() {
+  openTransactionModal(): void {
     this.txForm.reset({ recorded_at: new Date().toISOString().split('T')[0] });
-    
-    // Validadores dinámicos según el tab
+
     if (this.activeTab === 'Egresos') {
       this.txForm.get('category_id')?.setValidators(Validators.required);
     } else {
       this.txForm.get('category_id')?.clearValidators();
     }
     this.txForm.get('category_id')?.updateValueAndValidity();
-    
+
     this.showTxModal = true;
   }
 
-  closeModals() {
+  closeModals(): void {
     this.showTxModal = false;
     this.showCatModal = false;
   }
 
-  saveTransaction() {
+  async saveTransaction(): Promise<void> {
     if (this.txForm.invalid) {
       this.txForm.markAllAsTouched();
       return;
     }
 
-    this.saving = true;
-    const endpoint = this.activeTab === 'Ingresos' ? 'income' : 'expenses';
-    
-    this.http.post(`${environment.apiUrl}/finance/${endpoint}`, this.txForm.value).subscribe({
-      next: () => {
-        this.saving = false;
-        this.closeModals();
-        this.loadData(); // Refrescar tabla y KPIs
-      },
-      error: (err) => {
-        alert('Error: ' + (err.error?.message || 'Revisa los campos'));
-        this.saving = false;
-      }
-    });
-  }
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
 
-  deleteTransaction(id: number) {
-    if (confirm('¿Eliminar este registro de forma permanente?')) {
-      const endpoint = this.activeTab === 'Ingresos' ? 'income' : 'expenses';
-      this.http.delete(`${environment.apiUrl}/finance/${endpoint}/${id}`).subscribe(() => this.loadData());
+    this.saving = true;
+    try {
+      const table = this.activeTab === 'Ingresos' ? 'income_records' : 'expense_records';
+      const payload: any = {
+        business_id: business.id,
+        description: this.txForm.value.description,
+        amount: Number(this.txForm.value.amount),
+        recorded_at: this.txForm.value.recorded_at,
+        notes: this.txForm.value.notes || null,
+      };
+
+      if (this.activeTab === 'Egresos') {
+        payload.category_id = Number(this.txForm.value.category_id);
+      }
+
+      const { error } = await this.supabase.client.from(table).insert(payload);
+      if (error) throw new Error(error.message);
+
+      this.closeModals();
+      await this.loadData();
+    } catch (error: any) {
+      alert(error?.message ?? 'Revisa los campos.');
+    } finally {
+      this.saving = false;
     }
   }
 
-  // --- CATEGORIAS DE EGRESO ---
-  loadCategories() {
-    this.http.get<any>(`${environment.apiUrl}/finance/expense-categories`).subscribe(res => {
-      this.categories = res.data;
-    });
+  async deleteTransaction(id: number): Promise<void> {
+    if (!confirm('Eliminar este registro de forma permanente?')) return;
+
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    const table = this.activeTab === 'Ingresos' ? 'income_records' : 'expense_records';
+    const { error } = await this.supabase.client
+      .from(table)
+      .delete()
+      .eq('id', id)
+      .eq('business_id', business.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await this.loadData();
   }
 
-  openCategoryModal() {
+  async loadCategories(): Promise<void> {
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    const { data, error } = await this.supabase.client
+      .from('expense_categories')
+      .select('*')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .order('name');
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    this.categories = data ?? [];
+  }
+
+  openCategoryModal(): void {
     this.showCatModal = true;
   }
 
-  saveCategory() {
+  async saveCategory(): Promise<void> {
+    const business = this.businessService.currentBusiness();
+    if (!business || !this.newCatName.trim()) return;
+
     this.saving = true;
-    this.http.post(`${environment.apiUrl}/finance/expense-categories`, { name: this.newCatName.trim() }).subscribe({
-      next: () => {
-        this.saving = false;
-        this.newCatName = '';
-        this.loadCategories(); // Refrescar
-      },
-      error: () => this.saving = false
-    });
+    const { error } = await this.supabase.client
+      .from('expense_categories')
+      .insert({
+        business_id: business.id,
+        name: this.newCatName.trim(),
+        is_active: true,
+      });
+
+    this.saving = false;
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    this.newCatName = '';
+    await this.loadCategories();
   }
 
-  deleteCategory(id: number) {
-    if (confirm('¿Eliminar esta categoría? Esto no eliminará los gastos asignados a ella previamente.')) {
-      this.http.delete(`${environment.apiUrl}/finance/expense-categories/${id}`).subscribe(() => this.loadCategories());
+  async deleteCategory(id: number): Promise<void> {
+    if (!confirm('Eliminar esta categoria? Esto no eliminara los gastos asignados previamente.')) return;
+
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    const { error } = await this.supabase.client
+      .from('expense_categories')
+      .delete()
+      .eq('id', id)
+      .eq('business_id', business.id);
+
+    if (error) {
+      alert(error.message);
+      return;
     }
+
+    await this.loadCategories();
+  }
+
+  private async sumTable(table: 'income_records' | 'expense_records', businessId: number): Promise<number> {
+    let query = this.supabase.client
+      .from(table)
+      .select('amount')
+      .eq('business_id', businessId);
+
+    const period = this.getPeriodParams();
+    if (period.start_date) query = query.gte('recorded_at', period.start_date);
+    if (period.end_date) query = query.lte('recorded_at', period.end_date);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
   }
 }

@@ -1,22 +1,23 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { environment } from '../../../../../environments/environment';
+import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
+import { ToastService } from '../../../../core/services/toast.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
+import { BusinessService } from '../../../settings/services/business.service';
 
 interface Client {
   id: number;
+  business_id: number;
   name: string;
   email: string | null;
   phone: string | null;
   notes: string | null;
   last_visit_at: string | null;
+  created_at: string;
   appointments_count?: number;
 }
-
-import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
-import { ToastService } from '../../../../core/services/toast.service';
 
 @Component({
   selector: 'app-clients-list',
@@ -29,57 +30,35 @@ import { ToastService } from '../../../../core/services/toast.service';
           <h1 class="page-title">Clientes</h1>
           <p class="text-text-secondary text-sm">Gestiona la base de datos de tus clientes</p>
         </div>
-        <button class="btn-primary flex-shrink-0" (click)="openModal()"><span>+</span> Nuevo cliente</button>
+        <button class="btn-primary flex-shrink-0" (click)="openModal()">
+          <span>+</span> Nuevo cliente
+        </button>
       </div>
 
-      <!-- Búsqueda -->
       <div class="card mb-4">
         <div class="flex gap-3">
-          <input type="text" [(ngModel)]="searchQuery" (keyup.enter)="loadClients()" class="form-input flex-1" placeholder="Buscar por nombre, email o teléfono..." />
+          <input
+            type="text"
+            [(ngModel)]="searchQuery"
+            (keyup.enter)="loadClients()"
+            class="form-input flex-1"
+            placeholder="Buscar por nombre, email o telefono..."
+          />
           <button class="btn-secondary" (click)="loadClients()">Buscar</button>
           @if (searchQuery) {
-            <button class="text-sm text-primary hover:underline px-2" (click)="searchQuery=''; loadClients()">Limpiar</button>
+            <button class="text-sm text-primary hover:underline px-2" (click)="clearSearch()">Limpiar</button>
           }
         </div>
       </div>
 
-      <!-- Tabla de clientes -->
       <div class="card p-0 overflow-hidden">
         @if (loading) {
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="bg-gray-50/50 border-b border-border">
-                <tr>
-                  <th class="px-5 py-3 h-10 w-48"><div class="skeleton h-4 w-32"></div></th>
-                  <th class="px-5 py-3 h-10"><div class="skeleton h-4 w-40"></div></th>
-                  <th class="px-5 py-3 h-10"><div class="skeleton h-4 w-24"></div></th>
-                  <th class="px-5 py-3 h-10 text-center"><div class="skeleton h-4 w-12 mx-auto"></div></th>
-                  <th class="px-5 py-3 h-10 text-right"><div class="skeleton h-4 w-24 ml-auto"></div></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (i of [1,2,3,4,5]; track i) {
-                  <tr>
-                    <td class="px-5 py-4">
-                      <div class="flex items-center gap-3">
-                        <div class="skeleton-circle w-8 h-8"></div>
-                        <div class="skeleton-text w-32 h-4 mb-0"></div>
-                      </div>
-                    </td>
-                    <td class="px-5 py-4"><div class="skeleton-text w-40 h-3"></div><div class="skeleton-text w-24 h-3 mt-2"></div></td>
-                    <td class="px-5 py-4"><div class="skeleton-text w-20 h-4"></div></td>
-                    <td class="px-5 py-4 text-center"><div class="skeleton-circle w-6 h-6 mx-auto"></div></td>
-                    <td class="px-5 py-4 text-right"><div class="skeleton w-24 h-8 rounded-lg ml-auto"></div></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          <div class="py-16 text-center text-text-secondary animate-pulse">Cargando clientes...</div>
         } @else if (clients.length === 0) {
           <app-empty-state
             icon="👥"
             [title]="searchQuery ? 'No se encontraron clientes' : 'No tienes clientes registrados'"
-            [description]="searchQuery ? 'Prueba con otros términos de búsqueda.' : 'Los clientes se guardan al agendar citas manuales o por tu sitio público.'"
+            [description]="searchQuery ? 'Prueba con otros terminos de busqueda.' : 'Los clientes se guardan al agendar citas manuales o por tu sitio publico.'"
             [actionLabel]="!searchQuery ? 'Agregar primer cliente' : undefined"
             (onAction)="openModal()"
           ></app-empty-state>
@@ -90,7 +69,7 @@ import { ToastService } from '../../../../core/services/toast.service';
                 <tr>
                   <th class="px-5 py-3 rounded-tl-xl">Cliente</th>
                   <th class="px-5 py-3">Contacto</th>
-                  <th class="px-5 py-3">Última visita</th>
+                  <th class="px-5 py-3">Ultima visita</th>
                   <th class="px-5 py-3 text-center">Citas</th>
                   <th class="px-5 py-3 text-right rounded-tr-xl">Acciones</th>
                 </tr>
@@ -107,9 +86,15 @@ import { ToastService } from '../../../../core/services/toast.service';
                       </div>
                     </td>
                     <td class="px-5 py-3">
-                      @if (client.email) { <p class="text-text-secondary truncate max-w-[150px]" title="{{ client.email }}">✉️ {{ client.email }}</p> }
-                      @if (client.phone) { <p class="text-text-secondary truncate mt-0.5">📞 {{ client.phone }}</p> }
-                      @if (!client.email && !client.phone) { <span class="text-gray-400 italic">Sin datos</span> }
+                      @if (client.email) {
+                        <p class="text-text-secondary truncate max-w-[180px]" [title]="client.email">Email: {{ client.email }}</p>
+                      }
+                      @if (client.phone) {
+                        <p class="text-text-secondary truncate mt-0.5">Tel: {{ client.phone }}</p>
+                      }
+                      @if (!client.email && !client.phone) {
+                        <span class="text-gray-400 italic">Sin datos</span>
+                      }
                     </td>
                     <td class="px-5 py-3 whitespace-nowrap">
                       @if (client.last_visit_at) {
@@ -124,10 +109,10 @@ import { ToastService } from '../../../../core/services/toast.service';
                       </span>
                     </td>
                     <td class="px-5 py-3">
-                      <div class="flex items-center justify-end gap-2 text-xl">
-                        <a [routerLink]="['/app/clientes', client.id]" class="p-1.5 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-primary-light" title="Ver Perfil">👤</a>
-                        <button (click)="openModal(client)" class="p-1.5 text-text-secondary hover:text-green-600 transition-colors rounded-lg hover:bg-green-50" title="Editar">✏️</button>
-                        <button (click)="deleteClient(client)" class="p-1.5 text-text-secondary hover:text-red-500 transition-colors rounded-lg hover:bg-red-50" title="Eliminar">🗑️</button>
+                      <div class="flex items-center justify-end gap-2">
+                        <a [routerLink]="['/app/clientes', client.id]" class="btn-icon" title="Ver perfil">Ver</a>
+                        <button (click)="openModal(client)" class="btn-icon" title="Editar">Editar</button>
+                        <button (click)="deleteClient(client)" class="btn-icon text-red-600" title="Eliminar">Eliminar</button>
                       </div>
                     </td>
                   </tr>
@@ -138,7 +123,6 @@ import { ToastService } from '../../../../core/services/toast.service';
         }
       </div>
 
-      <!-- Modal Crear/Editar Cliente -->
       @if (showModal) {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
@@ -146,40 +130,42 @@ import { ToastService } from '../../../../core/services/toast.service';
               <h3 class="text-lg font-bold text-text-primary">{{ isEditing ? 'Editar cliente' : 'Nuevo cliente' }}</h3>
               <button (click)="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-2 leading-none">&times;</button>
             </div>
-            
+
             <form [formGroup]="clientForm" (ngSubmit)="saveClient()" class="p-6">
-              
               <div class="space-y-4">
                 <div>
                   <label class="form-label">Nombre completo *</label>
-                  <input type="text" formControlName="name" class="form-input" placeholder="Ej: Juan Pérez" />
-                  @if (f['name'].invalid && f['name'].touched) { <p class="form-error">Nombre requerido</p> }
+                  <input type="text" formControlName="name" class="form-input" placeholder="Ej: Juan Perez" />
+                  @if (f['name'].invalid && f['name'].touched) {
+                    <p class="form-error">Nombre requerido</p>
+                  }
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="form-label">Email</label>
                     <input type="email" formControlName="email" class="form-input" placeholder="correo@..." />
-                    @if (f['email'].invalid && f['email'].touched) { <p class="form-error">Email inválido</p> }
+                    @if (f['email'].invalid && f['email'].touched) {
+                      <p class="form-error">Email invalido</p>
+                    }
                   </div>
                   <div>
-                    <label class="form-label">Teléfono *</label>
+                    <label class="form-label">Telefono *</label>
                     <div class="input-group">
                       <span class="input-prefix">+56 9</span>
-                      <input type="text" formControlName="phone" class="form-input" placeholder="1234 5678" maxlength="8" />
+                      <input type="text" formControlName="phone" class="form-input" placeholder="12345678" maxlength="8" />
                     </div>
-                    @if (f['phone'].invalid && f['phone'].touched) { 
-                      <p class="form-error">Ingresa los 8 dígitos</p> 
+                    @if (f['phone'].invalid && f['phone'].touched) {
+                      <p class="form-error">Ingresa los 8 digitos</p>
                     }
                   </div>
                 </div>
 
                 <div>
                   <label class="form-label">Notas o alergias</label>
-                  <textarea formControlName="notes" class="form-input" rows="2" placeholder="Información interna..."></textarea>
+                  <textarea formControlName="notes" class="form-input" rows="2" placeholder="Informacion interna..."></textarea>
                 </div>
               </div>
-
 
               <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-border">
                 <button type="button" class="btn-secondary" (click)="closeModal()">Cancelar</button>
@@ -191,11 +177,21 @@ import { ToastService } from '../../../../core/services/toast.service';
           </div>
         </div>
       }
-
     </div>
   `,
   styles: [`
     .animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
+    .btn-icon {
+      border-radius: 0.5rem;
+      padding: 0.35rem 0.55rem;
+      color: var(--color-text-secondary, #64748b);
+      font-size: 0.75rem;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .btn-icon:hover {
+      background: #f1f5f9;
+      color: var(--color-primary, #2563eb);
+    }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
@@ -207,7 +203,6 @@ export class ClientsListComponent implements OnInit {
   loading = true;
   searchQuery = '';
 
-  // Modal State
   showModal = false;
   isEditing = false;
   saving = false;
@@ -217,9 +212,10 @@ export class ClientsListComponent implements OnInit {
   get f() { return this.clientForm.controls; }
 
   constructor(
-    private http: HttpClient,
     private fb: FormBuilder,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private businessService: BusinessService,
+    private supabase: SupabaseService
   ) {
     this.clientForm = this.fb.group({
       name: ['', Validators.required],
@@ -230,25 +226,46 @@ export class ClientsListComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadClients();
+    void this.loadClients();
   }
 
-  loadClients(): void {
+  async loadClients(): Promise<void> {
     this.loading = true;
-    let params: any = {};
-    if (this.searchQuery) {
-      params.search = this.searchQuery;
+    const business = this.businessService.currentBusiness();
+
+    if (!business) {
+      this.clients = [];
+      this.loading = false;
+      this.toastService.error('No hay un negocio seleccionado.');
+      return;
     }
-    
-    this.http.get<any>(`${environment.apiUrl}/clients`, { params }).subscribe({
-      next: (res) => {
-        this.clients = res.data.data;
-        this.loading = false;
-      },
-      error: () => {
-        this.loading = false;
+
+    try {
+      const search = this.searchQuery.trim();
+      let query = this.supabase.client
+        .from('clients')
+        .select('*')
+        .eq('business_id', business.id)
+        .order('created_at', { ascending: false });
+
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
       }
-    });
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+
+      this.clients = await this.withAppointmentCounts(business.id, (data ?? []) as Client[]);
+    } catch (error: any) {
+      this.toastService.error(error?.message ?? 'No se pudieron cargar los clientes.');
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  clearSearch(): void {
+    this.searchQuery = '';
+    void this.loadClients();
   }
 
   openModal(client?: Client): void {
@@ -258,7 +275,7 @@ export class ClientsListComponent implements OnInit {
       this.clientForm.patchValue({
         name: client.name,
         email: client.email,
-        phone: client.phone ? client.phone.replace('+569', '') : '',
+        phone: this.toLocalPhone(client.phone),
         notes: client.notes
       });
     } else {
@@ -274,48 +291,112 @@ export class ClientsListComponent implements OnInit {
     this.clientForm.reset();
   }
 
-  saveClient(): void {
+  async saveClient(): Promise<void> {
     if (this.clientForm.invalid) {
       this.clientForm.markAllAsTouched();
       return;
     }
 
+    const business = this.businessService.currentBusiness();
+    if (!business) {
+      this.toastService.error('No hay un negocio seleccionado.');
+      return;
+    }
+
     this.saving = true;
 
-    const payload = { 
-      ...this.clientForm.value,
-      phone: '+569' + this.clientForm.value.phone 
+    const payload = {
+      business_id: business.id,
+      name: this.clientForm.value.name,
+      email: this.clientForm.value.email || null,
+      phone: this.toSupabasePhone(this.clientForm.value.phone),
+      notes: this.clientForm.value.notes || null,
     };
-    const req = this.isEditing && this.editingId
-      ? this.http.put<{ data: Client }>(`${environment.apiUrl}/clients/${this.editingId}`, payload)
-      : this.http.post<{ data: Client }>(`${environment.apiUrl}/clients`, payload);
 
-    req.subscribe({
-      next: () => {
-        this.saving = false;
-        this.toastService.success(this.isEditing ? 'Cliente actualizado' : 'Cliente registrado con éxito');
-        this.closeModal();
-        this.loadClients();
-      },
-      error: () => {
-        this.saving = false;
-      }
-    });
-  }
+    try {
+      const result = this.isEditing && this.editingId
+        ? await this.supabase.client
+          .from('clients')
+          .update(payload)
+          .eq('id', this.editingId)
+          .eq('business_id', business.id)
+        : await this.supabase.client
+          .from('clients')
+          .insert(payload);
 
-  deleteClient(client: Client): void {
-    if (confirm(`¿Eliminar a ${client.name}?`)) {
-      this.http.delete(`${environment.apiUrl}/clients/${client.id}`).subscribe({
-        next: () => {
-          this.toastService.success('Cliente eliminado');
-          this.loadClients();
-        }
-      });
+      if (result.error) throw new Error(result.error.message);
+
+      this.toastService.success(this.isEditing ? 'Cliente actualizado' : 'Cliente registrado con exito');
+      this.closeModal();
+      await this.loadClients();
+    } catch (error: any) {
+      this.toastService.error(error?.message ?? 'No se pudo guardar el cliente.');
+    } finally {
+      this.saving = false;
     }
   }
 
+  async deleteClient(client: Client): Promise<void> {
+    if (!confirm(`Eliminar a ${client.name}?`)) return;
+
+    const business = this.businessService.currentBusiness();
+    if (!business) {
+      this.toastService.error('No hay un negocio seleccionado.');
+      return;
+    }
+
+    const { error } = await this.supabase.client
+      .from('clients')
+      .delete()
+      .eq('id', client.id)
+      .eq('business_id', business.id);
+
+    if (error) {
+      this.toastService.error(error.message);
+      return;
+    }
+
+    this.toastService.success('Cliente eliminado');
+    await this.loadClients();
+  }
+
   formatDate(dateStr: string): string {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('es-CL', { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('es-CL', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  private async withAppointmentCounts(businessId: number, clients: Client[]): Promise<Client[]> {
+    if (clients.length === 0) return clients;
+
+    const ids = clients.map(client => client.id);
+    const { data, error } = await this.supabase.client
+      .from('appointments')
+      .select('client_id')
+      .eq('business_id', businessId)
+      .in('client_id', ids);
+
+    if (error) throw new Error(error.message);
+
+    const counts = new Map<number, number>();
+    for (const appointment of data ?? []) {
+      const clientId = appointment.client_id;
+      if (clientId) counts.set(clientId, (counts.get(clientId) ?? 0) + 1);
+    }
+
+    return clients.map(client => ({
+      ...client,
+      appointments_count: counts.get(client.id) ?? 0,
+    }));
+  }
+
+  private toLocalPhone(phone: string | null): string {
+    return phone?.replace(/^\+?569/, '').replace(/\D/g, '').slice(0, 8) ?? '';
+  }
+
+  private toSupabasePhone(phone: string): string {
+    return `+569${phone.replace(/\D/g, '')}`;
   }
 }

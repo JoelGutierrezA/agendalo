@@ -1,10 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { environment } from '../../../../../environments/environment';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 import { BusinessService } from '../../../settings/services/business.service';
+import { AppointmentStatus, AppointmentsService } from '../../services/appointments.service';
 
 interface Service {
   id: number;
@@ -26,7 +26,7 @@ interface Service {
             {{ isEditing ? 'Modifica los datos de la reserva' : 'Completa los datos para crear la cita manual' }}
           </p>
         </div>
-        <a routerLink="/app/citas" class="btn-secondary">← Volver</a>
+        <a routerLink="/app/citas" class="btn-secondary">Volver</a>
       </div>
 
       <div class="card relative">
@@ -37,10 +37,9 @@ interface Service {
         }
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-5">
-          <!-- Cliente -->
           <div>
             <label class="form-label">Nombre del cliente *</label>
-            <input type="text" formControlName="client_name" class="form-input" placeholder="Ej: Juan Pérez" />
+            <input type="text" formControlName="client_name" class="form-input" placeholder="Ej: Juan Perez" />
             @if (form.get('client_name')?.invalid && form.get('client_name')?.touched) {
               <p class="form-error">El nombre es requerido</p>
             }
@@ -51,25 +50,24 @@ interface Service {
               <label class="form-label">Email del cliente</label>
               <input type="email" formControlName="client_email" class="form-input" placeholder="cliente&#64;correo.com" />
               @if (form.get('client_email')?.invalid && form.get('client_email')?.touched) {
-                <p class="form-error">Email inválido</p>
+                <p class="form-error">Email invalido</p>
               }
             </div>
             <div>
-              <label class="form-label">Teléfono del cliente *</label>
+              <label class="form-label">Telefono del cliente *</label>
               <div class="input-group">
                 <span class="input-prefix">+56 9</span>
-                <input type="tel" formControlName="client_phone" class="form-input" placeholder="1234 5678" maxlength="8" />
+                <input type="tel" formControlName="client_phone" class="form-input" placeholder="12345678" maxlength="8" />
               </div>
               @if (form.get('client_phone')?.invalid && form.get('client_phone')?.touched) {
-                <p class="form-error">Ingresa los 8 dígitos</p>
+                <p class="form-error">Ingresa los 8 digitos</p>
               }
             </div>
           </div>
 
-          <!-- Servicio -->
           <div>
             <label class="form-label">Servicio *</label>
-            <select formControlName="service_id" class="form-input">
+            <select formControlName="service_id" class="form-input" (change)="onDateChange()">
               <option value="">Seleccionar servicio</option>
               @for (service of services; track service.id) {
                 <option [value]="service.id">{{ service.name }} ({{ service.duration_minutes }} min - {{ service.price | number:'1.0-0' }} CLP)</option>
@@ -80,7 +78,6 @@ interface Service {
             }
           </div>
 
-          <!-- Fecha y hora -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="form-label">Fecha *</label>
@@ -89,7 +86,7 @@ interface Service {
                 <p class="form-error">La fecha es requerida</p>
               }
               @if (dayClosed) {
-                <p class="text-amber-600 text-[11px] mt-1 font-medium">⚠️ El negocio está configurado como cerrado este día.</p>
+                <p class="text-amber-600 text-[11px] mt-1 font-medium">El negocio esta cerrado este dia.</p>
               }
             </div>
             <div>
@@ -106,26 +103,24 @@ interface Service {
             </div>
           </div>
 
-          <!-- Observaciones -->
           <div>
             <label class="form-label">Observaciones</label>
             <textarea formControlName="notes" class="form-input" rows="3" placeholder="Notas internas sobre esta cita..."></textarea>
           </div>
 
-          <!-- Estado -->
           <div>
             <label class="form-label">Estado</label>
             <select formControlName="status" class="form-input">
               <option value="pending">Pendiente</option>
               <option value="confirmed">Confirmada</option>
               @if (isEditing) {
-                <option value="completed">Completada (Registra ingreso)</option>
-                <option value="no_show">No asistió</option>
+                <option value="completed">Completada (registra ingreso)</option>
+                <option value="no_show">No asistio</option>
                 <option value="cancelled">Cancelada</option>
               }
             </select>
           </div>
-          
+
           @if (errorMessage) {
             <div class="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
               {{ errorMessage }}
@@ -146,10 +141,10 @@ interface Service {
 export class AppointmentFormComponent implements OnInit {
   form: FormGroup;
   services: Service[] = [];
-  
+
   isEditing = false;
   appointmentId: number | null = null;
-  
+
   loadingData = true;
   saving = false;
   errorMessage = '';
@@ -159,21 +154,22 @@ export class AppointmentFormComponent implements OnInit {
 
   constructor(
     private fb: FormBuilder,
-    private http: HttpClient,
     private route: ActivatedRoute,
     private router: Router,
-    private businessService: BusinessService
+    private businessService: BusinessService,
+    private supabase: SupabaseService,
+    private appointmentsService: AppointmentsService
   ) {
     this.generateTimeOptions();
     this.form = this.fb.group({
-      client_name:  ['', Validators.required],
+      client_name: ['', Validators.required],
       client_email: ['', [Validators.email]],
       client_phone: ['', [Validators.required, Validators.pattern(/^[0-9]{8}$/)]],
-      service_id:   ['', Validators.required],
-      date:         ['', Validators.required],
-      time:         ['', Validators.required],
-      notes:        [''],
-      status:       ['pending', Validators.required],
+      service_id: ['', Validators.required],
+      date: ['', Validators.required],
+      time: ['', Validators.required],
+      notes: [''],
+      status: ['pending', Validators.required],
     });
   }
 
@@ -181,12 +177,10 @@ export class AppointmentFormComponent implements OnInit {
     const idParam = this.route.snapshot.paramMap.get('id');
     if (idParam && idParam !== 'nueva') {
       this.isEditing = true;
-      this.appointmentId = +idParam;
+      this.appointmentId = Number(idParam);
     }
 
-    this.loadInitialData();
-
-    // Recalcular slots disponibles cuando cambia el servicio
+    void this.loadInitialData();
     this.form.get('service_id')?.valueChanges.subscribe(() => this.onDateChange());
   }
 
@@ -200,18 +194,16 @@ export class AppointmentFormComponent implements OnInit {
     this.timeOptions = options;
   }
 
-  /** Filtra las opciones de tiempo según el horario de atención del día seleccionado */
   onDateChange(): void {
     const selectedDate = this.form.get('date')?.value;
     if (!selectedDate || this.openingHours.length === 0) {
-      this.generateTimeOptions(); // Resetear a todos si no hay info
+      this.generateTimeOptions();
       this.dayClosed = false;
       return;
     }
 
     const dateObj = new Date(selectedDate + 'T00:00:00');
-    const dayOfWeek = dateObj.getDay(); // 0=Domingo, 1=Lunes
-
+    const dayOfWeek = dateObj.getDay();
     const schedule = this.openingHours.find(h => h.day_of_week === dayOfWeek);
 
     if (!schedule || !schedule.is_open) {
@@ -227,9 +219,8 @@ export class AppointmentFormComponent implements OnInit {
     const serviceDuration = this.getSelectedServiceDuration();
     const openMinutes = this.toMinutes(open);
     const closeMinutes = this.toMinutes(close);
-
-    // Filtrar las opciones base
     const baseOptions: string[] = [];
+
     for (let h = 0; h < 24; h++) {
       const hh = h.toString().padStart(2, '0');
       baseOptions.push(`${hh}:00`);
@@ -239,14 +230,120 @@ export class AppointmentFormComponent implements OnInit {
     this.timeOptions = baseOptions.filter((time) => {
       const startMinutes = this.toMinutes(time);
       const endMinutes = startMinutes + serviceDuration;
-
       return startMinutes >= openMinutes && endMinutes <= closeMinutes;
     });
-    
-    // Si la hora actual seleccionada ya no es válida, la limpiamos
+
     const currentTime = this.form.get('time')?.value;
     if (currentTime && !this.timeOptions.includes(currentTime)) {
       this.form.get('time')?.setValue('');
+    }
+  }
+
+  async loadInitialData(): Promise<void> {
+    const business = this.businessService.currentBusiness();
+    if (!business) {
+      this.errorMessage = 'No hay un negocio seleccionado.';
+      this.loadingData = false;
+      return;
+    }
+
+    try {
+      let query = this.supabase.client
+        .from('services')
+        .select('id, name, duration_minutes, price, is_active')
+        .eq('business_id', business.id)
+        .order('name');
+
+      if (!this.isEditing) query = query.eq('is_active', true);
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+
+      this.services = (data ?? []).map((service: any) => ({
+        id: service.id,
+        name: service.name,
+        duration_minutes: Number(service.duration_minutes),
+        price: Number(service.price ?? 0),
+      }));
+
+      this.loadOpeningHours();
+
+      if (this.isEditing && this.appointmentId) {
+        await this.loadAppointment(this.appointmentId);
+      } else {
+        this.loadingData = false;
+      }
+    } catch (error: any) {
+      this.errorMessage = error?.message ?? 'No se pudieron cargar los servicios.';
+      this.loadingData = false;
+    }
+  }
+
+  private loadOpeningHours(): void {
+    this.businessService.getOpeningHours().subscribe({
+      next: (res) => {
+        this.openingHours = res.data || [];
+        if (this.form.get('date')?.value) this.onDateChange();
+      },
+    });
+  }
+
+  async loadAppointment(id: number): Promise<void> {
+    try {
+      const apt = await this.appointmentsService.find(id);
+      const dateObj = new Date(apt.scheduled_at);
+      const dateStr = dateObj.toLocaleDateString('en-CA');
+      const timeStr = dateObj.toTimeString().substring(0, 5);
+
+      this.form.patchValue({
+        client_name: apt.client_name,
+        client_email: apt.client_email,
+        client_phone: apt.client_phone ? apt.client_phone.replace(/^\+?569/, '') : '',
+        service_id: apt.service_id,
+        date: dateStr,
+        time: timeStr,
+        notes: apt.notes,
+        status: apt.status,
+      });
+
+      this.loadingData = false;
+    } catch {
+      this.errorMessage = 'No se encontro la cita solicitada.';
+      this.loadingData = false;
+    }
+  }
+
+  async onSubmit(): Promise<void> {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.saving = true;
+    this.errorMessage = '';
+
+    const payload = {
+      client_name: this.form.value.client_name,
+      client_email: this.form.value.client_email || null,
+      client_phone: '+569' + this.form.value.client_phone,
+      service_id: Number(this.form.value.service_id),
+      scheduled_at: new Date(`${this.form.value.date}T${this.form.value.time}:00`).toISOString(),
+      status: this.form.value.status as AppointmentStatus,
+      notes: this.form.value.notes || null,
+    };
+
+    try {
+      if (this.isEditing && this.appointmentId) {
+        await this.appointmentsService.update(this.appointmentId, payload);
+      } else {
+        await this.appointmentsService.create(payload);
+      }
+
+      this.router.navigate(['/app/citas']);
+    } catch (error: any) {
+      this.errorMessage = error?.message || 'Ocurrio un error al guardar la cita.';
+    } finally {
+      this.saving = false;
     }
   }
 
@@ -259,104 +356,5 @@ export class AppointmentFormComponent implements OnInit {
   private toMinutes(time: string): number {
     const [h, m] = time.split(':').map(Number);
     return (h * 60) + m;
-  }
-
-  loadInitialData(): void {
-    // 1. Cargar servicios para el select
-    this.http.get<{ data: Service[] }>(`${environment.apiUrl}/services`).subscribe({
-      next: (res) => {
-        // Solo mostrar servicios activos para crear, si es edición, mostramos todos por si acaso
-        this.services = this.isEditing ? res.data : res.data.filter((s: any) => s.is_active);
-        
-        // 2. Cargar horarios de atención para validar
-        this.loadOpeningHours();
-
-        // 3. Si editamos, cargar datos de la cita
-        if (this.isEditing && this.appointmentId) {
-          this.loadAppointment(this.appointmentId);
-        } else {
-          this.loadingData = false;
-        }
-      },
-      error: () => {
-        this.errorMessage = 'No se pudieron cargar los servicios. Intenta recargar.';
-        this.loadingData = false;
-      }
-    });
-  }
-
-  private loadOpeningHours(): void {
-    this.businessService.getOpeningHours().subscribe({
-      next: (res) => {
-        this.openingHours = res.data || [];
-        // Si ya hay una fecha (en edición), gatillar el filtro inicial
-        if (this.form.get('date')?.value) {
-          this.onDateChange();
-        }
-      }
-    });
-  }
-
-  loadAppointment(id: number): void {
-    this.http.get<{ data: any }>(`${environment.apiUrl}/appointments/${id}`).subscribe({
-      next: (res) => {
-        const apt = res.data;
-        const dateObj = new Date(apt.scheduled_at);
-        // Ajustar a la zona horaria local para los inputs tipo 'date' y 'time'
-        const dateStr = dateObj.toLocaleDateString('en-CA'); // YYYY-MM-DD
-        const timeStr = dateObj.toTimeString().substring(0, 5); // HH:mm
-        
-        this.form.patchValue({
-          client_name: apt.client_name,
-          client_email: apt.client_email,
-          client_phone: apt.client_phone ? apt.client_phone.replace('+569', '') : '',
-          service_id: apt.service_id,
-          date: dateStr,
-          time: timeStr,
-          notes: apt.notes,
-          status: apt.status
-        });
-        
-        this.loadingData = false;
-      },
-      error: () => {
-        this.errorMessage = 'No se encontró la cita solicitada.';
-        this.loadingData = false;
-      }
-    });
-  }
-
-  onSubmit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      return;
-    }
-    
-    this.saving = true;
-    this.errorMessage = '';
-
-    const payload = { 
-      ...this.form.value,
-      client_phone: '+569' + this.form.value.client_phone
-    };
-    // Combinar date y time
-    payload.scheduled_at = `${payload.date} ${payload.time}:00`;
-    delete payload.date;
-    delete payload.time;
-
-    const request = this.isEditing && this.appointmentId
-      ? this.http.put(`${environment.apiUrl}/appointments/${this.appointmentId}`, payload)
-      : this.http.post(`${environment.apiUrl}/appointments`, payload);
-
-    request.subscribe({
-      next: () => {
-        this.saving = false;
-        this.router.navigate(['/app/citas']);
-      },
-      error: (err) => {
-        this.errorMessage = err.error?.message || 'Ocurrió un error al guardar la cita.';
-        this.saving = false;
-      }
-    });
   }
 }
