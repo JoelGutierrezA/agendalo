@@ -5,6 +5,12 @@ import { guestGuard } from './core/guards/guest.guard';
 
 export const routes: Routes = [
   {
+    path: 'planes',
+    loadComponent: () =>
+      import('./features/plans/plans.component').then(m => m.PlansComponent),
+    title: 'Planes - Skedia'
+  },
+  {
     path: '',
     loadComponent: () =>
       import('./features/home/home.component').then(m => m.HomeComponent),
