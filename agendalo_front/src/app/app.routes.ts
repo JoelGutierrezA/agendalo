@@ -4,6 +4,13 @@ import { businessSetupGuard } from './core/guards/business-setup.guard';
 import { guestGuard } from './core/guards/guest.guard';
 
 export const routes: Routes = [
+  {
+    path: '',
+    loadComponent: () =>
+      import('./features/home/home.component').then(m => m.HomeComponent),
+    title: 'Skedia'
+  },
+
   // === Rutas Públicas (clientes finales) ===
   {
     path: 'negocio',
@@ -36,11 +43,6 @@ export const routes: Routes = [
     path: '',
     canActivate: [guestGuard],
     children: [
-      {
-        path: '',
-        redirectTo: 'login',
-        pathMatch: 'full'
-      },
       {
         path: 'login',
         loadComponent: () =>
