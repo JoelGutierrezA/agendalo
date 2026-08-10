@@ -18,7 +18,10 @@ interface ExpenseCategory {
   template: `
     <div>
       <div class="page-header">
-        <h1 class="page-title">Finanzas</h1>
+        <div class="flex items-center gap-3">
+          <img src="assets/Interfaz/Finanzas.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+          <h1 class="page-title">Finanzas</h1>
+        </div>
         <div class="flex gap-2">
           <select class="form-input w-40" [(ngModel)]="period" (change)="loadData()">
             <option value="current">Este mes</option>
@@ -61,7 +64,7 @@ interface ExpenseCategory {
 
           <div class="flex gap-2">
             @if (activeTab === 'Egresos') {
-              <button class="btn-secondary btn-sm" (click)="openCategoryModal()">Categorias</button>
+              <button class="btn-secondary btn-sm" (click)="openCategoryModal()">Categorías</button>
             }
             <button class="btn-primary btn-sm" (click)="openTransactionModal()">
               + Registrar {{ activeTab === 'Ingresos' ? 'Ingreso' : 'Egreso' }}
@@ -85,9 +88,9 @@ interface ExpenseCategory {
               <thead class="bg-white border-b border-border text-text-secondary">
                 <tr>
                   <th class="px-5 py-3 font-medium">Fecha</th>
-                  <th class="px-5 py-3 font-medium">Descripcion</th>
+                  <th class="px-5 py-3 font-medium">Descripción</th>
                   @if (activeTab === 'Egresos') {
-                    <th class="px-5 py-3 font-medium">Categoria</th>
+                    <th class="px-5 py-3 font-medium">Categoría</th>
                   }
                   <th class="px-5 py-3 font-medium text-right">Monto</th>
                   <th class="px-5 py-3 font-medium text-right w-20">Acciones</th>
@@ -147,13 +150,13 @@ interface ExpenseCategory {
               </div>
 
               <div>
-                <label class="form-label">Descripcion breve *</label>
+                <label class="form-label">Descripción breve *</label>
                 <input type="text" formControlName="description" class="form-input" placeholder="Ej: Pago de cliente, insumos, etc." />
               </div>
 
               @if (activeTab === 'Egresos') {
                 <div>
-                  <label class="form-label">Categoria *</label>
+                  <label class="form-label">Categoría *</label>
                   <div class="flex gap-2">
                     <select formControlName="category_id" class="form-input flex-1">
                       <option value="">Seleccione...</option>
@@ -161,7 +164,7 @@ interface ExpenseCategory {
                         <option [value]="cat.id">{{ cat.name }}</option>
                       }
                     </select>
-                    <button type="button" class="btn-secondary px-3" (click)="openCategoryModal()" title="Gestionar categorias">+</button>
+                    <button type="button" class="btn-secondary px-3" (click)="openCategoryModal()" title="Gestionar categorías">+</button>
                   </div>
                 </div>
               }
@@ -184,14 +187,14 @@ interface ExpenseCategory {
         <div class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
             <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-              <h3 class="font-bold">Categorias de Egresos</h3>
+              <h3 class="font-bold">Categorías de Egresos</h3>
               <button (click)="showCatModal = false" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
 
             <div class="p-6">
               <div class="flex gap-2 mb-6">
-                <input type="text" [(ngModel)]="newCatName" class="form-input flex-1" placeholder="Nueva categoria..." />
-                <button class="btn-primary" (click)="saveCategory()" [disabled]="!newCatName.trim() || saving">Anadir</button>
+                <input type="text" [(ngModel)]="newCatName" class="form-input flex-1" placeholder="Nueva categoría..." />
+                <button class="btn-primary" (click)="saveCategory()" [disabled]="!newCatName.trim() || saving">Añadir</button>
               </div>
 
               <div class="border border-border rounded-lg max-h-60 overflow-y-auto">
@@ -203,7 +206,7 @@ interface ExpenseCategory {
                     </li>
                   }
                   @if (categories.length === 0) {
-                    <li class="p-4 text-center text-sm text-gray-500">Agrega tu primera categoria. Ej: Arriendo, Insumos.</li>
+                    <li class="p-4 text-center text-sm text-gray-500">Agrega tu primera categoría. Ej: Arriendo, Insumos.</li>
                   }
                 </ul>
               </div>
@@ -389,7 +392,7 @@ export class FinanceComponent implements OnInit {
   }
 
   async deleteTransaction(id: number): Promise<void> {
-    if (!confirm('Eliminar este registro de forma permanente?')) return;
+    if (!confirm('¿Eliminar este registro de forma permanente?')) return;
 
     const business = this.businessService.currentBusiness();
     if (!business) return;
@@ -456,7 +459,7 @@ export class FinanceComponent implements OnInit {
   }
 
   async deleteCategory(id: number): Promise<void> {
-    if (!confirm('Eliminar esta categoria? Esto no eliminara los gastos asignados previamente.')) return;
+    if (!confirm('¿Eliminar esta categoría? Esto no eliminará los gastos asignados previamente.')) return;
 
     const business = this.businessService.currentBusiness();
     if (!business) return;

@@ -12,11 +12,13 @@ import { PlatformService } from '../../services/platform.service';
     <div class="space-y-6 max-w-6xl mx-auto p-6">
       <div class="page-header">
         <div>
+          <div class="flex items-center gap-3">
+          <img src="assets/Interfaz/Dashboard.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
           <h1 class="page-title">Panel de Administración Global</h1>
-          <p class="text-text-secondary text-sm">Resumen de la plataforma Agéndalo</p>
+        </div>
         </div>
         <div class="flex gap-2">
-            <button class="btn-secondary" (click)="loadStats()">🔄 Recargar</button>
+            <button class="btn-secondary" (click)="loadStats()">Recargar</button>
         </div>
       </div>
 
@@ -65,7 +67,7 @@ import { PlatformService } from '../../services/platform.service';
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="card cursor-pointer hover:shadow-lg transition-all" routerLink="/admin-plataforma/negocios">
           <div class="p-8 text-center">
-            <span class="text-5xl mb-4 block">🏢</span>
+            <img src="assets/Interfaz/Servicios.png" alt="" class="w-14 h-14 rounded-xl object-cover mx-auto mb-4" aria-hidden="true">
             <h3 class="font-bold text-xl mb-2">Gestionar Negocios</h3>
             <p class="text-text-secondary text-sm">Ver, activar o desactivar negocios registrados en la plataforma.</p>
           </div>
@@ -73,7 +75,7 @@ import { PlatformService } from '../../services/platform.service';
 
         <div class="card cursor-pointer hover:shadow-lg transition-all" routerLink="/admin-plataforma/usuarios">
           <div class="p-8 text-center">
-            <span class="text-5xl mb-4 block">👥</span>
+            <img src="assets/Interfaz/Clientes.png" alt="" class="w-14 h-14 rounded-xl object-cover mx-auto mb-4" aria-hidden="true">
             <h3 class="font-bold text-xl mb-2">Gestionar Usuarios</h3>
             <p class="text-text-secondary text-sm">Administrar cuentas de usuarios, dueños de negocio y administradores.</p>
           </div>
@@ -103,3 +105,4 @@ export class AdminDashboardComponent implements OnInit {
     });
   }
 }
+

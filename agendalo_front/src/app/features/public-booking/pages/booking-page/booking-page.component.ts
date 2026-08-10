@@ -12,6 +12,7 @@ interface BusinessPublic {
   address: string | null;
   phone: string | null;
   email: string | null;
+  logo_url: string | null;
 }
 
 interface ServicePublic {
@@ -40,7 +41,11 @@ interface ServicePublic {
       } @else if (business) {
         <div class="bg-white rounded-2xl shadow-sm border border-border p-6 sm:p-8 mb-6 text-center">
           <div class="w-20 h-20 bg-primary-light text-primary rounded-full flex items-center justify-center text-3xl mx-auto mb-4 font-bold overflow-hidden shadow-inner">
-            {{ business.name.charAt(0).toUpperCase() }}
+            @if (business.logo_url) {
+              <img [src]="business.logo_url" alt="Icono de {{ business.name }}" class="w-full h-full object-cover">
+            } @else {
+              {{ business.name.charAt(0).toUpperCase() }}
+            }
           </div>
           <h1 class="text-2xl font-bold text-text-primary">{{ business.name }}</h1>
           @if (business.description) {
@@ -304,7 +309,7 @@ export class BookingPageComponent implements OnInit {
   async loadBusinessInfo(): Promise<void> {
     const { data, error } = await this.supabase.client
       .from('businesses')
-      .select('id, name, description, address, phone, email')
+      .select('id, name, description, address, phone, email, logo_url')
       .eq('slug', this.slug)
       .eq('is_active', true)
       .single();

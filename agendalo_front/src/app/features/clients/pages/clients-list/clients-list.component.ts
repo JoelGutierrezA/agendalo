@@ -27,8 +27,10 @@ interface Client {
     <div>
       <div class="page-header flex gap-4 justify-between items-center flex-wrap">
         <div>
-          <h1 class="page-title">Clientes</h1>
-          <p class="text-text-secondary text-sm">Gestiona la base de datos de tus clientes</p>
+          <div class="flex items-center gap-3">
+            <img src="assets/Interfaz/Clientes.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+            <h1 class="page-title">Clientes</h1>
+          </div>
         </div>
         <button class="btn-primary flex-shrink-0" (click)="openModal()">
           <span>+</span> Nuevo cliente
@@ -42,7 +44,7 @@ interface Client {
             [(ngModel)]="searchQuery"
             (keyup.enter)="loadClients()"
             class="form-input flex-1"
-            placeholder="Buscar por nombre, email o telefono..."
+            placeholder="Buscar por nombre, email o teléfono..."
           />
           <button class="btn-secondary" (click)="loadClients()">Buscar</button>
           @if (searchQuery) {
@@ -58,7 +60,7 @@ interface Client {
           <app-empty-state
             icon="👥"
             [title]="searchQuery ? 'No se encontraron clientes' : 'No tienes clientes registrados'"
-            [description]="searchQuery ? 'Prueba con otros terminos de busqueda.' : 'Los clientes se guardan al agendar citas manuales o por tu sitio publico.'"
+            [description]="searchQuery ? 'Prueba con otros términos de búsqueda.' : 'Los clientes se guardan al agendar citas manuales o por tu sitio público.'"
             [actionLabel]="!searchQuery ? 'Agregar primer cliente' : undefined"
             (onAction)="openModal()"
           ></app-empty-state>
@@ -69,7 +71,7 @@ interface Client {
                 <tr>
                   <th class="px-5 py-3 rounded-tl-xl">Cliente</th>
                   <th class="px-5 py-3">Contacto</th>
-                  <th class="px-5 py-3">Ultima visita</th>
+                  <th class="px-5 py-3">Última visita</th>
                   <th class="px-5 py-3 text-center">Citas</th>
                   <th class="px-5 py-3 text-right rounded-tr-xl">Acciones</th>
                 </tr>
@@ -146,7 +148,7 @@ interface Client {
                     <label class="form-label">Email</label>
                     <input type="email" formControlName="email" class="form-input" placeholder="correo@..." />
                     @if (f['email'].invalid && f['email'].touched) {
-                      <p class="form-error">Email invalido</p>
+                      <p class="form-error">Email inválido</p>
                     }
                   </div>
                   <div>
@@ -156,7 +158,7 @@ interface Client {
                       <input type="text" formControlName="phone" class="form-input" placeholder="12345678" maxlength="8" />
                     </div>
                     @if (f['phone'].invalid && f['phone'].touched) {
-                      <p class="form-error">Ingresa los 8 digitos</p>
+                      <p class="form-error">Ingresa los 8 dígitos</p>
                     }
                   </div>
                 </div>

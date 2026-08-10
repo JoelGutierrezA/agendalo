@@ -137,7 +137,7 @@ export class SupplyService {
           description: `Compra de Insumo: ${supply.name} (Cant: ${quantity})`,
           amount: totalCost,
           recorded_at: payload.purchased_at,
-          notes: `Generado automaticamente desde Insumos. ${payload.notes ?? ''}`.trim(),
+          notes: `Generado automáticamente desde Insumos. ${payload.notes ?? ''}`.trim(),
         })
         .select('id')
         .single();
@@ -228,7 +228,7 @@ export class SupplyService {
       .select('id')
       .single();
 
-    if (error || !data) throw new Error(error?.message ?? 'No se pudo crear la categoria de insumos.');
+    if (error || !data) throw new Error(error?.message ?? 'No se pudo crear la categoría de insumos.');
     return data;
   }
 

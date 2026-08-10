@@ -23,7 +23,10 @@ interface Service {
   template: `
     <div>
       <div class="page-header">
-        <h1 class="page-title">Servicios</h1>
+        <div class="flex items-center gap-3">
+          <img src="assets/Interfaz/Servicios.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+          <h1 class="page-title">Servicios</h1>
+        </div>
         <button class="btn-primary" (click)="openModal()">
           <span>+</span> Nuevo servicio
         </button>
@@ -42,7 +45,7 @@ interface Service {
         <app-empty-state
           icon="+"
           title="No hay servicios configurados"
-          description="Crea los servicios que ofreces para que aparezcan en tu pagina de reservas"
+          description="Crea los servicios que ofreces para que aparezcan en tu página de reservas"
           actionLabel="Crear primer servicio"
           (onAction)="openModal()"
         ></app-empty-state>
@@ -54,7 +57,7 @@ interface Service {
             <thead>
               <tr class="border-b border-border bg-gray-50/50">
                 <th class="text-left px-5 py-3 text-text-secondary font-medium">Servicio</th>
-                <th class="text-left px-5 py-3 text-text-secondary font-medium hidden sm:table-cell">Duracion</th>
+                <th class="text-left px-5 py-3 text-text-secondary font-medium hidden sm:table-cell">Duración</th>
                 <th class="text-left px-5 py-3 text-text-secondary font-medium hidden sm:table-cell">Precio</th>
                 <th class="text-center px-5 py-3 text-text-secondary font-medium">Estado</th>
                 <th class="text-right px-5 py-3 text-text-secondary font-medium">Acciones</th>
@@ -127,13 +130,13 @@ interface Service {
             </div>
 
             <div>
-              <label class="form-label">Descripcion</label>
-              <textarea formControlName="description" class="form-input" rows="2" placeholder="Descripcion opcional del servicio"></textarea>
+              <label class="form-label">Descripción</label>
+              <textarea formControlName="description" class="form-input" rows="2" placeholder="Descripción opcional del servicio"></textarea>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="form-label">Duracion (min) *</label>
+                <label class="form-label">Duración (min) *</label>
                 <input type="number" formControlName="duration_minutes" class="form-input" min="5" max="480" />
                 @if (form.get('duration_minutes')?.invalid && form.get('duration_minutes')?.touched) {
                   <p class="form-error">Entre 5 y 480 min</p>
@@ -170,7 +173,7 @@ interface Service {
           <div class="text-center mb-4">
             <h3 class="text-lg font-semibold text-text-primary">Eliminar servicio</h3>
             <p class="text-text-secondary text-sm mt-1">
-              Vas a eliminar <strong>{{ deletingService.name }}</strong>. Esta accion no se puede deshacer.
+              Vas a eliminar <strong>{{ deletingService.name }}</strong>. Esta acción no se puede deshacer.
             </p>
           </div>
           <div class="flex gap-3">

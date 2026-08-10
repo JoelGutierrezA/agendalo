@@ -16,14 +16,17 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
   template: `
     <div>
       <div class="page-header">
-        <h1 class="page-title">Configuración</h1>
+        <div class="flex items-center gap-3">
+          <img src="assets/Interfaz/Configuraci%C3%B3n.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+          <h1 class="page-title">Configuración</h1>
+        </div>
         <button
           class="btn-primary"
-          [disabled]="loading || saveSuccess"
+          [disabled]="loading || logoUploading || saveSuccess"
           (click)="onSave()"
         >
-          @if (loading) { ⏳ Guardando... }
-          @else if (saveSuccess) { ✅ Guardado }
+          @if (loading) { Guardando... }
+          @else if (saveSuccess) { Guardado }
           @else { Guardar cambios }
         </button>
       </div>
@@ -54,6 +57,32 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
             <p class="text-text-secondary text-sm">Cargando datos...</p>
           } @else {
             <form [formGroup]="businessForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border border-border bg-gray-50/50">
+                <div class="w-20 h-20 rounded-2xl bg-primary-light text-primary flex items-center justify-center text-2xl font-bold overflow-hidden flex-shrink-0">
+                  @if (logoPreviewUrl) {
+                    <img [src]="logoPreviewUrl" alt="Icono del negocio" class="w-full h-full object-cover">
+                  } @else {
+                    {{ (businessForm.value.name || 'S').charAt(0).toUpperCase() }}
+                  }
+                </div>
+
+                <div class="flex-1">
+                  <label class="form-label">Icono del negocio</label>
+                  <p class="text-xs text-text-secondary mb-3">Usa una imagen cuadrada en PNG, JPG o WebP de máximo 1 MB. Se mostrará en tu página de reservas.</p>
+                  <div class="flex flex-wrap gap-2">
+                    <input #logoInput type="file" class="hidden" accept="image/png,image/jpeg,image/webp" (change)="onLogoSelected($event)" />
+                    <button type="button" class="btn-secondary" (click)="logoInput.click()" [disabled]="logoUploading">
+                      {{ logoUploading ? 'Subiendo...' : 'Subir imagen' }}
+                    </button>
+                    @if (logoPreviewUrl) {
+                      <button type="button" class="btn-secondary" (click)="removeLogo()" [disabled]="logoUploading">
+                        Quitar imagen
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+
               <div class="sm:col-span-2">
                 <label class="form-label">Nombre del negocio *</label>
                 <input type="text" formControlName="name" class="form-input" placeholder="Nombre comercial" />
@@ -128,7 +157,7 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
               }
             </div>
           }
-          <p class="mt-4 text-xs text-text-secondary">💡 Los horarios se guardarán automáticamente en tu perfil de negocio.</p>
+          <p class="mt-4 text-xs text-text-secondary">Los horarios se guardarán automáticamente en tu perfil de negocio.</p>
         </div>
       }
 
@@ -153,7 +182,7 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
               </label>
             </div>
           </div>
-          <p class="mt-4 text-xs text-text-secondary">💡 Configuración de reservas disponible próximamente</p>
+          <p class="mt-4 text-xs text-text-secondary">Configuración de reservas disponible próximamente</p>
         </div>
       }
 
@@ -170,7 +199,7 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
               class="p-5 rounded-xl border flex items-start gap-4"
               [ngClass]="googleStatus?.connected ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'"
             >
-              <span class="text-3xl flex-shrink-0">🗓️</span>
+              <span class="text-3xl flex-shrink-0">📅</span>
               <div class="flex-1">
                 @if (googleStatus?.connected) {
                   <p class="font-medium text-emerald-900">Conectado</p>
@@ -225,6 +254,8 @@ export class SettingsComponent implements OnInit {
   saveSuccess  = false;
   saveError    = '';
   activeTab    = 'business';
+  logoPreviewUrl = '';
+  logoUploading = false;
   calendarLoading = false;
   googleStatus: GoogleCalendarStatus | null = null;
   settingsData: BusinessSettings = {
@@ -241,7 +272,7 @@ export class SettingsComponent implements OnInit {
     { id: 'business', label: 'Datos del negocio', icon: '🏪' },
     { id: 'hours',    label: 'Horarios',           icon: '🕐' },
     { id: 'booking',  label: 'Reservas',            icon: '⚙️' },
-    { id: 'calendar', label: 'Google Calendar',     icon: '🗓️' },
+    { id: 'calendar', label: 'Google Calendar',     icon: '📅' },
   ];
 
   get filteredTabs() {
@@ -284,6 +315,7 @@ export class SettingsComponent implements OnInit {
       address:     [''],
       city:        [''],
       country:     [''],
+      logo_url:    [''],
     });
   }
 
@@ -384,12 +416,54 @@ export class SettingsComponent implements OnInit {
             address:     b.address     ?? '',
             city:        b.city        ?? '',
             country:     b.country     ?? '',
+            logo_url:    b.logo_url    ?? '',
           });
+          this.logoPreviewUrl = b.logo_url ?? '';
         }
         this.dataLoading = false;
       },
       error: () => { this.dataLoading = false; }
     });
+  }
+
+  onLogoSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+
+    if (!file) return;
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      this.saveError = 'No se puede subir esa imagen. El formato debe ser PNG, JPG o WebP.';
+      return;
+    }
+
+    if (file.size > 1 * 1024 * 1024) {
+      this.saveError = 'No se puede subir esa imagen. El icono no puede pesar más de 1 MB.';
+      return;
+    }
+
+    this.logoUploading = true;
+    this.saveError = '';
+
+    this.businessService.uploadBusinessLogo(file).subscribe({
+      next: (res) => {
+        this.logoPreviewUrl = res.data;
+        this.businessForm.patchValue({ logo_url: res.data });
+        this.logoUploading = false;
+        this.toastService.success('Icono del negocio actualizado');
+      },
+      error: (err) => {
+        this.saveError = err?.message ?? 'No se pudo subir el icono del negocio.';
+        this.logoUploading = false;
+      }
+    });
+  }
+
+  removeLogo(): void {
+    this.logoPreviewUrl = '';
+    this.businessForm.patchValue({ logo_url: '' });
   }
 
   private loadOpeningHours(): void {
@@ -454,7 +528,8 @@ export class SettingsComponent implements OnInit {
 
     const payload = {
       ...this.businessForm.value,
-      phone: '+569' + this.businessForm.value.phone
+      phone: '+569' + this.businessForm.value.phone,
+      logo_url: this.businessForm.value.logo_url || null,
     };
 
     this.businessService.updateBusiness(payload).subscribe({
@@ -496,3 +571,4 @@ export class SettingsComponent implements OnInit {
     });
   }
 }
+

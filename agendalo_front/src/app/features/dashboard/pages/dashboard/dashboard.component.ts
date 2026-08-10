@@ -26,35 +26,32 @@ export type ChartOptions = {
       <!-- Page Header -->
       <div class="page-header">
         <div>
-          <h1 class="page-title text-2xl font-bold">Dashboard</h1>
-          <p class="text-text-secondary text-sm">Resumen de rendimiento de tu negocio</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <a routerLink="/app/citas/nueva" class="btn-primary shadow-sm hover:shadow-md transition-all">
-            <span>+</span> Nueva cita
-          </a>
+          <div class="flex items-center gap-3">
+            <img src="assets/Interfaz/Dashboard.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+            <h1 class="page-title">Dashboard</h1>
+          </div>
         </div>
       </div>
 
       <!-- KPI Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         @for (kpi of kpis; track kpi.label) {
-          <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
+          <div class="card p-4 sm:p-5 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
             <div class="flex items-start justify-between">
               <div>
-                <p class="text-text-secondary text-xs font-bold uppercase tracking-wider mb-1">{{ kpi.label }}</p>
+                <p class="text-text-secondary text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1">{{ kpi.label }}</p>
                 @if (loading) {
-                  <div class="skeleton-text w-24 h-8 mt-1"></div>
+                  <div class="skeleton-text w-16 sm:w-24 h-7 sm:h-8 mt-1"></div>
                 } @else {
-                  <p class="text-2xl font-bold text-text-primary">{{ kpi.value }}</p>
+                  <p class="text-xl sm:text-2xl font-bold text-text-primary">{{ kpi.value }}</p>
                 }
               </div>
-              <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110" [style.background]="kpi.iconBg" [style.color]="kpi.iconColor">
-                <span class="text-xl">{{ kpi.icon }}</span>
+              <div class="hidden sm:flex flex-shrink-0 w-14 h-14 rounded-xl items-center justify-center overflow-hidden transition-transform group-hover:scale-110" [style.background]="kpi.iconBg">
+                <img [src]="kpi.iconPath" alt="" class="w-14 h-14 object-cover" aria-hidden="true">
               </div>
             </div>
             <!-- Subtitle/Trend -->
-            <div class="mt-4 flex items-center gap-1">
+            <div class="mt-3 sm:mt-4 flex items-center gap-1">
                <span class="text-xs font-medium" [class]="kpi.trendColor">{{ kpi.trend }}</span>
             </div>
           </div>
@@ -119,7 +116,7 @@ export type ChartOptions = {
             </div>
           } @else if (upcomingAppointments.length === 0) {
             <div class="py-8 text-center bg-background/50 rounded-lg border border-border border-dashed">
-               <span class="text-2xl block mb-2 opacity-50">📅</span>
+               <img src="assets/Interfaz/Citas.png" alt="" class="w-10 h-10 rounded-lg object-cover mx-auto mb-2 opacity-70" aria-hidden="true">
                <p class="text-text-secondary text-sm">No hay citas próximas</p>
             </div>
           } @else {
@@ -156,10 +153,10 @@ export class DashboardComponent implements OnInit {
   upcomingAppointments: any[] = [];
 
   kpis: any[] = [
-    { label: 'Citas Hoy', value: '0', icon: '📅', iconBg: '#EFF6FF', iconColor: '#3B82F6', trend: 'Hoy', trendColor: 'text-text-secondary' },
-    { label: 'Ingresos (Mes)', value: '$0', icon: '💰', iconBg: '#F0FDF4', iconColor: '#22C55E', trend: 'Actual', trendColor: 'text-success' },
-    { label: 'Egresos (Mes)', value: '$0', icon: '📉', iconBg: '#FEF2F2', iconColor: '#EF4444', trend: 'Actual', trendColor: 'text-danger' },
-    { label: 'Balance', value: '$0', icon: '📊', iconBg: '#F8FAFC', iconColor: '#64748B', trend: 'Mensual', trendColor: 'text-text-secondary' },
+    { label: 'Citas Hoy', value: '0', iconPath: 'assets/Interfaz/Citas.png', iconBg: '#EFF6FF', trend: 'Hoy', trendColor: 'text-text-secondary' },
+    { label: 'Ingresos (Mes)', value: '$0', iconPath: 'assets/Interfaz/Finanzas.png', iconBg: '#F0FDF4', trend: 'Actual', trendColor: 'text-success' },
+    { label: 'Egresos (Mes)', value: '$0', iconPath: 'assets/Interfaz/Finanzas.png', iconBg: '#FEF2F2', trend: 'Actual', trendColor: 'text-danger' },
+    { label: 'Balance', value: '$0', iconPath: 'assets/Interfaz/Dashboard.png', iconBg: '#F8FAFC', trend: 'Mensual', trendColor: 'text-text-secondary' },
   ];
 
   public chartOptions: Partial<ChartOptions> = {};
@@ -245,3 +242,4 @@ export class DashboardComponent implements OnInit {
     });
   }
 }
+

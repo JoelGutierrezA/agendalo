@@ -61,11 +61,11 @@ interface ClientDetail {
                   <span class="font-medium text-text-primary text-right break-all">{{ client.email || '-' }}</span>
                 </div>
                 <div class="pt-3 flex justify-between items-center group">
-                  <span class="text-text-secondary">Telefono</span>
+                  <span class="text-text-secondary">Teléfono</span>
                   <span class="font-medium text-text-primary">{{ client.phone || '-' }}</span>
                 </div>
                 <div class="pt-3 flex justify-between items-center group">
-                  <span class="text-text-secondary">Ultima visita</span>
+                  <span class="text-text-secondary">Última visita</span>
                   <span class="font-medium text-text-primary">{{ client.last_visit_at ? formatDateOnly(client.last_visit_at) : '-' }}</span>
                 </div>
                 <div class="pt-3 flex justify-between items-center group">
@@ -100,8 +100,8 @@ interface ClientDetail {
                   <div class="py-12 text-center text-text-secondary animate-pulse">Cargando historial...</div>
                 } @else if (history.length === 0) {
                   <div class="empty-state py-16">
-                    <p class="font-medium text-text-primary mt-3">Sin historial aun</p>
-                    <p class="text-text-secondary text-sm mt-1">Este cliente no ha tenido citas todavia.</p>
+                    <p class="font-medium text-text-primary mt-3">Sin historial aún</p>
+                    <p class="text-text-secondary text-sm mt-1">Este cliente no ha tenido citas todavía.</p>
                   </div>
                 } @else {
                   <div class="divide-y divide-border">
@@ -277,7 +277,7 @@ export class ClientDetailComponent implements OnInit {
       confirmed: 'Confirmada',
       completed: 'Completada',
       cancelled: 'Cancelada',
-      no_show: 'No asistio',
+      no_show: 'No asistió',
     };
     return map[status] || status;
   }

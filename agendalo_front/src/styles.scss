@@ -157,7 +157,7 @@
 
   /* Sidebar */
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium
+    @apply flex items-center gap-4 px-5 py-3 rounded-xl text-base font-medium
            text-sidebar-text transition-colors duration-150 cursor-pointer
            hover:bg-white/10 hover:text-white;
   }
@@ -182,7 +182,13 @@
   }
 
   .page-title {
-    @apply text-2xl font-bold text-text-primary;
+    @apply text-3xl font-bold text-text-primary;
+  }
+
+  .page-header img[src*="assets/Interfaz"] {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
   }
 
   /* Empty State */

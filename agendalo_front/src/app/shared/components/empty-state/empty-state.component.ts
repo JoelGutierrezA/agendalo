@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 @Component({
   selector: 'app-empty-state',
@@ -12,10 +12,10 @@ import { CommonModule } from '@angular/common';
       </div>
       <h3 class="text-lg font-bold text-text-primary mb-2">{{ title }}</h3>
       <p class="text-text-secondary max-w-sm mb-6">{{ description }}</p>
-      
-      <button 
-        *ngIf="actionLabel" 
-        (click)="onAction.emit()" 
+
+      <button
+        *ngIf="actionLabel"
+        (click)="onAction.emit()"
         class="btn-primary"
       >
         {{ actionLabel }}
@@ -30,10 +30,10 @@ import { CommonModule } from '@angular/common';
   `]
 })
 export class EmptyStateComponent {
-  @Input() icon: string = '🔍';
+  @Input() icon: string = '🔎';
   @Input() title: string = 'No se encontraron resultados';
   @Input() description: string = 'Intenta ajustar tus filtros o agregar un nuevo registro.';
   @Input() actionLabel?: string;
-  
+
   @Output() onAction = new EventEmitter<void>();
 }

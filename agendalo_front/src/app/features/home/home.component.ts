@@ -1,11 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { LandingCapabilitiesComponent } from './landing-capabilities.component';
+import { PublicFooterComponent } from '../../shared/components/public-footer/public-footer.component';
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, LandingCapabilitiesComponent, PublicFooterComponent],
   template: `
     <div class="min-h-screen bg-slate-50 text-text-primary flex flex-col">
       <header class="bg-white border-b border-border">
@@ -50,50 +52,83 @@ import { RouterLink } from '@angular/router';
           </div>
         </section>
 
-        <section class="max-w-[1440px] mx-auto px-6 sm:px-10 lg:px-16 2xl:px-20 pb-16 sm:pb-24">
-          <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+        <app-landing-capabilities />
+
+        <section class="max-w-[1440px] mx-auto px-6 sm:px-10 lg:px-16 2xl:px-20 pt-14 sm:pt-16 pb-16 sm:pb-24">
+          <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
             <div>
-              <p class="text-primary text-sm font-bold uppercase tracking-wider">Planes</p>
-              <h2 class="text-3xl font-extrabold text-slate-900 mt-2">Elige como quieres empezar</h2>
+              <h2 class="text-3xl font-extrabold text-slate-900">Elige cómo quieres empezar</h2>
               <p class="text-text-secondary mt-2 max-w-2xl">
-                Parte con 14 dias gratis y escala cuando tu negocio necesite mas control, equipo o automatizacion.
+                Planes pensados para distintas etapas de tu negocio.
               </p>
             </div>
             <a routerLink="/planes" class="btn-secondary justify-center">Ver detalle completo</a>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div class="bg-primary-light border border-sky-200 rounded-lg shadow-card p-5 sm:p-6 mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div class="flex items-start gap-4">
+              <img src="assets/Iconos/Organiza.png" alt="" class="w-14 h-14 rounded-lg object-contain flex-shrink-0 shadow-card" aria-hidden="true">
+              <div>
+                <h3 class="text-xl font-bold text-slate-900">Prueba Skedia gratis durante 14 días</h3>
+                <p class="mt-1 text-sm sm:text-base text-text-secondary">
+                  Configura tu negocio, organiza tus primeras reservas y descubre cómo Skedia puede ayudarte en tu día a día.
+                </p>
+                <div class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-text-secondary">
+                  <span class="inline-flex items-center gap-1"><span class="text-primary font-bold">✓</span>14 días para probarlo</span>
+                  <span class="inline-flex items-center gap-1"><span class="text-primary font-bold">✓</span>Sin compromiso</span>
+                  <span class="inline-flex items-center gap-1"><span class="text-primary font-bold">✓</span>Elige tu plan después</span>
+                </div>
+              </div>
+            </div>
+            <a routerLink="/registro" class="btn-primary justify-center px-5 py-3 lg:flex-shrink-0">
+              Probar Skedia gratis
+            </a>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             @for (plan of plans; track plan.name) {
               <article
-                class="bg-white border rounded-lg shadow-card p-5 flex flex-col"
-                [class.border-primary]="plan.featured"
-                [class.ring-1]="plan.featured"
-                [class.ring-primary]="plan.featured"
+                class="relative overflow-hidden border rounded-lg p-5 flex flex-col transition-all duration-200 hover:-translate-y-1"
+                [ngClass]="{
+                  'bg-white border-border shadow-card hover:shadow-card-hover': plan.tone === 'basic',
+                  'bg-gradient-to-br from-white via-primary-light to-sky-50 border-sky-200 shadow-xl shadow-sky-100/70': plan.tone === 'accent',
+                  'bg-gradient-to-br from-[#071c3f] via-[#082752] to-[#0b3268] border-[#17447f] text-white shadow-2xl shadow-blue-950/25': plan.tone === 'premium'
+                }"
               >
-                @if (plan.badge) {
-                  <span class="self-start text-xs font-bold px-2.5 py-1 rounded-full bg-primary-light text-primary mb-4">
-                    {{ plan.badge }}
+                @if (plan.tone === 'accent') {
+                  <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-sky-400 to-cyan-300"></div>
+                }
+                @if (plan.tone === 'premium') {
+                  <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-200 via-amber-400 to-yellow-500"></div>
+                  <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-amber-300/15 blur-2xl"></div>
+                }
+                @if (plan.recommended) {
+                  <span class="absolute right-5 top-5 rounded-full bg-primary px-3 py-1 text-xs font-bold text-white shadow-lg shadow-primary/20">
+                    Más elegido
                   </span>
                 }
-                <h3 class="text-lg font-bold text-slate-900">{{ plan.name }}</h3>
-                <p class="text-sm text-text-secondary mt-1 min-h-10">{{ plan.description }}</p>
+                <h3 class="relative text-lg font-bold" [ngClass]="plan.tone === 'premium' ? 'text-white' : 'text-slate-900'">{{ plan.name }}</h3>
+                <p class="relative text-sm mt-1 min-h-10" [ngClass]="plan.tone === 'premium' ? 'text-slate-300' : 'text-text-secondary'">{{ plan.description }}</p>
                 <div class="mt-5">
-                  <p class="text-3xl font-extrabold text-slate-900">{{ plan.price }}</p>
-                  <p class="text-xs text-text-secondary mt-1">{{ plan.period }}</p>
+                  <p class="relative text-3xl font-extrabold" [ngClass]="plan.tone === 'premium' ? 'text-white' : 'text-slate-900'">{{ plan.price }}</p>
+                  <p class="relative text-xs mt-1" [ngClass]="plan.tone === 'premium' ? 'text-amber-200' : 'text-text-secondary'">{{ plan.period }}</p>
                 </div>
-                <ul class="mt-5 space-y-2 text-sm text-text-secondary flex-1">
+                <ul class="relative mt-5 space-y-2 text-sm flex-1" [ngClass]="plan.tone === 'premium' ? 'text-slate-300' : 'text-text-secondary'">
                   @for (feature of plan.features; track feature) {
                     <li class="flex gap-2">
-                      <span class="text-primary font-bold">✓</span>
+                      <span class="font-bold" [ngClass]="plan.tone === 'premium' ? 'text-amber-300' : 'text-primary'">✓</span>
                       <span>{{ feature }}</span>
                     </li>
                   }
                 </ul>
                 <a
                   [routerLink]="plan.ctaLink"
-                  class="mt-6 justify-center"
-                  [class.btn-primary]="plan.featured"
-                  [class.btn-secondary]="!plan.featured"
+                  class="relative mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  [ngClass]="{
+                    'bg-surface text-text-primary border border-border hover:bg-gray-50 focus:ring-primary': plan.tone === 'basic',
+                    'bg-primary text-white hover:bg-primary-dark focus:ring-primary shadow-lg shadow-primary/20': plan.tone === 'accent',
+                    'bg-amber-400 text-[#071c3f] hover:bg-amber-300 focus:ring-amber-400 focus:ring-offset-[#071c3f] shadow-lg shadow-amber-500/20': plan.tone === 'premium'
+                  }"
                 >
                   {{ plan.cta }}
                 </a>
@@ -103,87 +138,44 @@ import { RouterLink } from '@angular/router';
         </section>
       </main>
 
-      <footer class="bg-white border-t border-border">
-        <div class="max-w-[1440px] mx-auto px-6 sm:px-10 lg:px-16 2xl:px-20 py-5 flex flex-col sm:flex-row items-start justify-between gap-3 text-sm text-text-secondary">
-          <div class="flex flex-col items-start gap-2">
-            <img src="assets/Skedia%20Fondo%20Blanco.png" alt="Skedia" class="h-9 w-auto max-w-[140px] object-contain">
-            <p>Plataforma de agendamiento</p>
-            <div class="flex items-center gap-2 pt-1" aria-label="Redes sociales">
-              <button type="button" class="w-9 h-9 rounded-full border border-blue-100 bg-primary-light text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="Instagram" aria-label="Instagram">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="4" y="4" width="16" height="16" rx="5" stroke="currentColor" stroke-width="2"/>
-                  <circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="2"/>
-                  <circle cx="17" cy="7" r="1.2" fill="currentColor"/>
-                </svg>
-              </button>
-              <button type="button" class="w-9 h-9 rounded-full border border-blue-100 bg-primary-light text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="Facebook" aria-label="Facebook">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M14.2 8.4V6.9c0-.7.5-1.1 1.2-1.1h1.8V3h-2.6c-2.8 0-4.2 1.6-4.2 4v1.4H8.3v3.1h2.1V21h3.8v-9.5h2.6l.5-3.1h-3.1z"/>
-                </svg>
-              </button>
-              <button type="button" class="w-9 h-9 rounded-full border border-blue-100 bg-primary-light text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="WhatsApp" aria-label="WhatsApp">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5.5 19.1l1-3A7.5 7.5 0 1 1 9 18.5l-3.5.6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                  <path d="M9.4 8.8c.2-.5.4-.5.7-.5h.5c.2 0 .4.1.5.4l.7 1.5c.1.3.1.5-.1.7l-.4.5c.6 1.1 1.4 1.9 2.5 2.5l.5-.4c.2-.2.5-.2.7-.1l1.5.7c.3.1.4.3.4.5v.5c0 .3-.1.6-.5.7-.7.3-1.7.2-2.8-.3-1.5-.7-2.8-1.8-3.7-3.2-.8-1.2-1.2-2.6-.9-3.5z" fill="currentColor"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="flex items-center gap-4">
-            <a routerLink="/planes" class="hover:text-primary">Planes</a>
-            <a routerLink="/login" class="hover:text-primary">Ingresar</a>
-            <a routerLink="/registro" class="hover:text-primary">Crear cuenta</a>
-          </div>
-        </div>
-      </footer>
+      <app-public-footer />
     </div>
   `,
 })
 export class HomeComponent {
   plans = [
     {
-      name: '14 dias gratis',
-      description: 'Prueba Skedia sin compromiso y valida si calza con tu negocio.',
-      price: '$0',
-      period: 'por 14 dias',
-      badge: 'Para empezar',
-      cta: 'Probar gratis',
-      ctaLink: '/registro',
-      featured: false,
-      features: ['Agenda y reservas publicas', 'Servicios y clientes', 'Dashboard basico'],
-    },
-    {
-      name: 'Basico',
-      description: 'Para negocios pequenos que necesitan ordenar reservas y clientes.',
+      name: 'Básico',
+      description: 'Para negocios pequeños que necesitan ordenar reservas y clientes.',
       price: '$9.990',
       period: 'CLP / mes',
-      badge: '',
-      cta: 'Elegir Basico',
+      cta: 'Elegir Básico',
       ctaLink: '/registro',
-      featured: false,
-      features: ['1 negocio', 'Agenda mensual/semanal', 'Pagina publica de reservas'],
+      tone: 'basic',
+      recommended: false,
+      features: ['1 negocio', 'Agenda y reservas', 'Clientes y servicios', 'Página pública de reservas'],
     },
     {
       name: 'Medio',
-      description: 'Para negocios con mas movimiento y control financiero diario.',
+      description: 'Para negocios con más movimiento que necesitan mayor control de su operación.',
       price: '$19.990',
       period: 'CLP / mes',
-      badge: 'Recomendado',
       cta: 'Elegir Medio',
       ctaLink: '/registro',
-      featured: true,
-      features: ['Todo Basico', 'Finanzas e insumos', 'Reportes de rendimiento'],
+      tone: 'accent',
+      recommended: true,
+      features: ['Todo lo del plan Básico', 'Ingresos y egresos', 'Balance del negocio', 'Indicadores y seguimiento'],
     },
     {
       name: 'Premium',
-      description: 'Para equipos que necesitan automatizacion, soporte y escalabilidad.',
+      description: 'Para negocios que necesitan mayor integración y control.',
       price: '$34.990',
       period: 'CLP / mes',
-      badge: 'Completo',
       cta: 'Elegir Premium',
       ctaLink: '/registro',
-      featured: false,
-      features: ['Todo Medio', 'Google Calendar', 'Soporte prioritario'],
+      tone: 'premium',
+      recommended: false,
+      features: ['Todo lo del plan Medio', 'Sincronización con Google Calendar', 'Soporte prioritario'],
     },
   ];
 }

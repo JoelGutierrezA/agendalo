@@ -21,10 +21,10 @@ interface Service {
     <div class="max-w-2xl mx-auto">
       <div class="page-header">
         <div>
-          <h1 class="page-title">{{ isEditing ? 'Editar cita' : 'Nueva cita' }}</h1>
-          <p class="text-text-secondary text-sm">
-            {{ isEditing ? 'Modifica los datos de la reserva' : 'Completa los datos para crear la cita manual' }}
-          </p>
+          <div class="flex items-center gap-3">
+            <img src="assets/Interfaz/Citas.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+            <h1 class="page-title">{{ isEditing ? 'Editar cita' : 'Nueva cita' }}</h1>
+          </div>
         </div>
         <a routerLink="/app/citas" class="btn-secondary">Volver</a>
       </div>
@@ -39,7 +39,7 @@ interface Service {
         <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-5">
           <div>
             <label class="form-label">Nombre del cliente *</label>
-            <input type="text" formControlName="client_name" class="form-input" placeholder="Ej: Juan Perez" />
+            <input type="text" formControlName="client_name" class="form-input" placeholder="Ej: Juan Pérez" />
             @if (form.get('client_name')?.invalid && form.get('client_name')?.touched) {
               <p class="form-error">El nombre es requerido</p>
             }
@@ -50,17 +50,17 @@ interface Service {
               <label class="form-label">Email del cliente</label>
               <input type="email" formControlName="client_email" class="form-input" placeholder="cliente&#64;correo.com" />
               @if (form.get('client_email')?.invalid && form.get('client_email')?.touched) {
-                <p class="form-error">Email invalido</p>
+                <p class="form-error">Email inválido</p>
               }
             </div>
             <div>
-              <label class="form-label">Telefono del cliente *</label>
+              <label class="form-label">Teléfono del cliente *</label>
               <div class="input-group">
                 <span class="input-prefix">+56 9</span>
                 <input type="tel" formControlName="client_phone" class="form-input" placeholder="12345678" maxlength="8" />
               </div>
               @if (form.get('client_phone')?.invalid && form.get('client_phone')?.touched) {
-                <p class="form-error">Ingresa los 8 digitos</p>
+                <p class="form-error">Ingresa los 8 dígitos</p>
               }
             </div>
           </div>
@@ -86,7 +86,7 @@ interface Service {
                 <p class="form-error">La fecha es requerida</p>
               }
               @if (dayClosed) {
-                <p class="text-amber-600 text-[11px] mt-1 font-medium">El negocio esta cerrado este dia.</p>
+                <p class="text-amber-600 text-[11px] mt-1 font-medium">El negocio está cerrado este día.</p>
               }
             </div>
             <div>
@@ -115,7 +115,7 @@ interface Service {
               <option value="confirmed">Confirmada</option>
               @if (isEditing) {
                 <option value="completed">Completada (registra ingreso)</option>
-                <option value="no_show">No asistio</option>
+                <option value="no_show">No asistió</option>
                 <option value="cancelled">Cancelada</option>
               }
             </select>

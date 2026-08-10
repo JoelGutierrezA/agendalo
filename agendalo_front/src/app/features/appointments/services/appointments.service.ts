@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BusinessService } from '../../settings/services/business.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { GoogleCalendarService } from '../../settings/services/google-calendar.service';
+import { environment } from '../../../../environments/environment';
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 
@@ -141,11 +142,13 @@ export class AppointmentsService {
       };
     });
 
-    const googleEvents = await this.googleCalendarService.listEvents(
-      start.toISOString(),
-      end.toISOString(),
-      (data ?? []).map((appointment: any) => appointment.google_event_id).filter(Boolean)
-    ).catch(() => []);
+    const googleEvents = environment.googleCalendarEventsEnabled
+      ? await this.googleCalendarService.listEvents(
+          start.toISOString(),
+          end.toISOString(),
+          (data ?? []).map((appointment: any) => appointment.google_event_id).filter(Boolean)
+        ).catch(() => [])
+      : [];
 
     return [...internalEvents, ...googleEvents].sort((a, b) => {
       return new Date(a.start).getTime() - new Date(b.start).getTime();

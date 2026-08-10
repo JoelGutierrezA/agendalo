@@ -21,7 +21,7 @@ export class BusinessService {
       const businessId = user?.business_id;
 
       if (!businessId) {
-        throw new Error('El usuario aun no tiene un negocio configurado.');
+        throw new Error('El usuario aún no tiene un negocio configurado.');
       }
 
       const { data, error } = await this.supabase.client
@@ -146,6 +146,32 @@ export class BusinessService {
     );
   }
 
+  uploadBusinessLogo(file: File): Observable<ApiResponse<string>> {
+    return defer(async () => {
+      const business = this.requireCurrentBusiness();
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const filePath = `${business.id}/logo-${Date.now()}.${extension}`;
+
+      const { error } = await this.supabase.client.storage
+        .from('business-assets')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { data } = this.supabase.client.storage
+        .from('business-assets')
+        .getPublicUrl(filePath);
+
+      return this.wrap(data.publicUrl);
+    });
+  }
+
   getCategories(): Observable<ApiResponse<any[]>> {
     return from(
       this.supabase.client
@@ -206,7 +232,7 @@ export class BusinessService {
         .single();
 
       if (error || !data) {
-        throw new Error(error?.message ?? 'No se pudo cargar la configuracion.');
+        throw new Error(error?.message ?? 'No se pudo cargar la configuración.');
       }
 
       return this.wrap(this.mapSettings(data));
@@ -225,7 +251,7 @@ export class BusinessService {
         .single();
 
       if (error || !data) {
-        throw new Error(error?.message ?? 'No se pudo actualizar la configuracion.');
+        throw new Error(error?.message ?? 'No se pudo actualizar la configuración.');
       }
 
       const current = this.currentBusiness();

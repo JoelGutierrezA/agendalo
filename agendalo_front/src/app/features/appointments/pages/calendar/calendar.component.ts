@@ -25,11 +25,13 @@ interface CalendarMonth {
   standalone: true,
   imports: [CommonModule, RouterModule],
   template: `
-    <div class="h-[calc(100vh-80px)] flex flex-col">
+    <div class="h-[calc(100vh-150px)] min-h-[620px] flex flex-col">
       <div class="page-header shrink-0">
         <div>
-          <h1 class="page-title">{{ pageTitle }}</h1>
-          <p class="text-text-secondary text-sm">{{ pageSubtitle }}</p>
+          <div class="flex items-center gap-3">
+            <img src="assets/Interfaz/Agenda.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+            <h1 class="page-title">{{ pageTitle }}</h1>
+          </div>
         </div>
         <div class="flex gap-2">
           <a routerLink="/app/citas" class="btn-secondary">Lista</a>
@@ -95,7 +97,7 @@ interface CalendarMonth {
                         </div>
                       }
                       @if (month.events.length > 4) {
-                        <p class="text-xs text-text-secondary">+{{ month.events.length - 4 }} citas mas</p>
+                        <p class="text-xs text-text-secondary">+{{ month.events.length - 4 }} citas más</p>
                       }
                     </div>
                   }
@@ -117,7 +119,7 @@ interface CalendarMonth {
               <div class="grid grid-cols-7 flex-1" [class.auto-rows-fr]="viewMode === 'month'">
                 @for (day of visibleDays; track day.dateStr) {
                   <div
-                    class="border-r border-b border-border last:border-r-0 relative p-2 flex flex-col gap-1.5 min-h-[130px]"
+                    class="border-r border-b border-border last:border-r-0 relative p-2 flex flex-col gap-1.5 min-h-[70px]"
                     [class.bg-white]="day.isCurrentMonth || viewMode === 'week'"
                     [class.bg-gray-50]="!day.isCurrentMonth && viewMode === 'month'"
                   >
@@ -170,7 +172,7 @@ interface CalendarMonth {
 
                       @if (getEventsForDay(day.dateStr).length > (viewMode === 'week' ? 8 : 3)) {
                         <button type="button" class="text-xs text-primary text-left font-semibold" (click)="openDay(day.date)">
-                          +{{ getEventsForDay(day.dateStr).length - (viewMode === 'week' ? 8 : 3) }} mas
+                          +{{ getEventsForDay(day.dateStr).length - (viewMode === 'week' ? 8 : 3) }} más
                         </button>
                       }
                     </div>
@@ -204,7 +206,7 @@ export class CalendarComponent implements OnInit {
   yearMonths: CalendarMonth[] = [];
   periodLabel = '';
 
-  readonly weekdayNames = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
+  readonly weekdayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   readonly viewOptions: { id: CalendarView; label: string }[] = [
     { id: 'year', label: 'Año' },
     { id: 'month', label: 'Mes' },
@@ -218,15 +220,6 @@ export class CalendarComponent implements OnInit {
       week: 'Agenda Semanal',
     };
     return titles[this.viewMode];
-  }
-
-  get pageSubtitle(): string {
-    const subtitles: Record<CalendarView, string> = {
-      year: 'Visualiza tus citas agrupadas por mes',
-      month: 'Visualiza tus citas del mes',
-      week: 'Visualiza tus citas de la semana',
-    };
-    return subtitles[this.viewMode];
   }
 
   constructor(private appointmentsService: AppointmentsService) {}

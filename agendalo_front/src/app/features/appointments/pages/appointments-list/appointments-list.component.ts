@@ -14,8 +14,10 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
     <div>
       <div class="page-header flex-col sm:flex-row gap-4 items-start sm:items-center">
         <div>
-          <h1 class="page-title">Citas</h1>
-          <p class="text-text-secondary text-sm">Gestiona todas las reservas de tu negocio</p>
+          <div class="flex items-center gap-3">
+            <img src="assets/Interfaz/Citas.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+            <h1 class="page-title">Citas</h1>
+          </div>
         </div>
         <div class="flex gap-2 w-full sm:w-auto">
           <a routerLink="/app/agenda" class="btn-secondary flex-1 sm:flex-none justify-center">Calendario</a>
@@ -24,10 +26,23 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
       </div>
 
       <div class="card mb-4">
-        <div class="flex flex-wrap gap-3 items-end">
+        <button
+          type="button"
+          class="sm:hidden w-full flex items-center justify-between text-left"
+          (click)="toggleFilters()"
+          [attr.aria-expanded]="filtersExpanded"
+        >
+          <span class="font-semibold text-text-primary">Filtros</span>
+          <span class="text-sm text-primary font-semibold">{{ filtersExpanded ? 'Ocultar' : 'Mostrar' }}</span>
+        </button>
+
+        <div
+          class="flex-wrap gap-3 items-end"
+          [ngClass]="filtersExpanded ? 'flex mt-4 sm:mt-0' : 'hidden sm:flex'"
+        >
           <div class="flex-1 min-w-[200px]">
             <label class="text-xs text-text-secondary font-medium mb-1 block">Buscar</label>
-            <input type="text" [(ngModel)]="filters.search" (keyup.enter)="loadAppointments()" class="form-input w-full" placeholder="Nombre, email o telefono..." />
+            <input type="text" [(ngModel)]="filters.search" (keyup.enter)="applyFilters()" class="form-input w-full" placeholder="Nombre, email o teléfono..." />
           </div>
           <div class="w-full sm:w-40">
             <label class="text-xs text-text-secondary font-medium mb-1 block">Estado</label>
@@ -37,7 +52,7 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
               <option value="confirmed">Confirmada</option>
               <option value="completed">Completada</option>
               <option value="cancelled">Cancelada</option>
-              <option value="no_show">No asistio</option>
+              <option value="no_show">No asistió</option>
             </select>
           </div>
           <div class="w-full sm:w-40">
@@ -48,10 +63,10 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
             <label class="text-xs text-text-secondary font-medium mb-1 block">Ordenar por</label>
             <select [(ngModel)]="filters.sort_by" (change)="loadAppointments()" class="form-input w-full">
               <option value="scheduled_at">Fecha de la cita</option>
-              <option value="created_at">Fecha de creacion</option>
+              <option value="created_at">Fecha de creación</option>
             </select>
           </div>
-          <button (click)="loadAppointments()" class="btn-secondary h-[42px] px-6">Filtrar</button>
+          <button (click)="applyFilters()" class="btn-secondary h-[42px] px-6">Filtrar</button>
 
           @if (hasFilters()) {
             <button (click)="clearFilters()" class="text-sm text-primary hover:underline h-[42px] px-2">Limpiar</button>
@@ -66,7 +81,7 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
           <app-empty-state
             icon="📋"
             title="No hay citas"
-            [description]="hasFilters() ? 'Ninguna cita coincide con los filtros de busqueda.' : 'Crea tu primera cita o espera reservas publicas.'"
+            [description]="hasFilters() ? 'Ninguna cita coincide con los filtros de búsqueda.' : 'Crea tu primera cita o espera reservas públicas.'"
             [actionLabel]="!hasFilters() ? 'Crear primera cita' : undefined"
             (onAction)="router.navigate(['/app/citas/nueva'])"
           ></app-empty-state>
@@ -125,7 +140,7 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
                           <option value="pending">Marcar pendiente</option>
                           <option value="confirmed">Marcar confirmada</option>
                           <option value="completed">Marcar completada</option>
-                          <option value="no_show">Marcar no asistio</option>
+                          <option value="no_show">Marcar no asistió</option>
                           <option value="cancelled">Cancelar cita</option>
                         </select>
 
@@ -150,6 +165,7 @@ export class AppointmentsListComponent implements OnInit {
   appointments: AppointmentRow[] = [];
   loading = true;
   statusUpdating: number | null = null;
+  filtersExpanded = false;
 
   filters = {
     search: '',
@@ -184,7 +200,7 @@ export class AppointmentsListComponent implements OnInit {
     const select = event.target as HTMLSelectElement;
     const newStatus = select.value as AppointmentStatus;
 
-    if (newStatus === 'cancelled' && !confirm('Estas seguro de que deseas cancelar esta cita?')) {
+    if (newStatus === 'cancelled' && !confirm('¿Estás seguro de que deseas cancelar esta cita?')) {
       select.value = apt.status;
       return;
     }
@@ -214,6 +230,15 @@ export class AppointmentsListComponent implements OnInit {
     );
   }
 
+  toggleFilters(): void {
+    this.filtersExpanded = !this.filtersExpanded;
+  }
+
+  applyFilters(): void {
+    this.filtersExpanded = false;
+    void this.loadAppointments();
+  }
+
   clearFilters(): void {
     this.filters = {
       search: '',
@@ -222,6 +247,7 @@ export class AppointmentsListComponent implements OnInit {
       sort_by: 'scheduled_at',
       sort_dir: 'desc',
     };
+    this.filtersExpanded = false;
     void this.loadAppointments();
   }
 
@@ -248,7 +274,7 @@ export class AppointmentsListComponent implements OnInit {
       confirmed: 'Confirmada',
       completed: 'Completada',
       cancelled: 'Cancelada',
-      no_show: 'No asistio',
+      no_show: 'No asistió',
     };
     return labels[status] || status;
   }

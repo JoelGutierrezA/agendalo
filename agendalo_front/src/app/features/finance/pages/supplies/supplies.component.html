@@ -2,11 +2,13 @@
   <!-- Header con KPIs o Información -->
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-bold text-text-primary tracking-tight">📦 Insumos y Compras</h1>
-      <p class="text-text-secondary text-sm mt-1">Registra tus compras. Se descontarán de "Finanzas" automáticamente.</p>
+      <div class="flex items-center gap-3">
+        <img src="assets/Interfaz/Insumos.png" alt="" class="w-10 h-10 rounded-xl object-cover flex-shrink-0" aria-hidden="true">
+        <h1 class="text-3xl font-bold text-text-primary tracking-tight">Insumos y Compras</h1>
+      </div>
     </div>
     <button (click)="openPurchaseModal()" class="btn-primary flex items-center gap-2">
-      <span class="text-lg">🛒</span> Registrar Compra
+      <span class="text-lg">+</span> Registrar Compra
     </button>
   </div>
 
@@ -61,7 +63,7 @@
                   <button (click)="deletePurchase(item.id)" 
                           class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                           title="Revertir Compra">
-                    🗑️
+                    Eliminar
                   </button>
                 </td>
               </tr>
@@ -69,7 +71,7 @@
               <tr>
                 <td colspan="6" class="px-6 py-12 text-center text-text-secondary">
                   <div class="flex flex-col items-center gap-3">
-                    <span class="text-4xl">🛍️</span>
+                    <span class="text-4xl">+</span>
                     <p>No has registrado compras de insumos aún.</p>
                   </div>
                 </td>
@@ -89,7 +91,7 @@
     <div class="px-6 py-4 border-b border-border flex justify-between items-center bg-gray-50/50">
       <h3 class="text-lg font-bold text-text-primary">Registrar Compra</h3>
       <button (click)="showPurchaseModal = false" class="text-gray-400 hover:text-gray-600 transition-colors">
-        ✕
+        ×
       </button>
     </div>
 
@@ -166,7 +168,7 @@
   <div class="bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-border flex justify-between items-center bg-gray-50/50">
       <h3 class="text-lg font-bold text-text-primary">Nuevo Insumo</h3>
-      <button (click)="showCatalogModal = false" class="text-gray-400 hover:text-gray-600 transition-colors">✕</button>
+      <button (click)="showCatalogModal = false" class="text-gray-400 hover:text-gray-600 transition-colors">×</button>
     </div>
 
     <form [formGroup]="catalogForm" (ngSubmit)="saveCatalogItem()" class="p-6">
@@ -188,3 +190,4 @@
   </div>
 </div>
 }
+

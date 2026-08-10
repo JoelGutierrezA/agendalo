@@ -14,8 +14,10 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
     <div class="space-y-6 max-w-6xl mx-auto p-6">
       <div class="page-header">
         <div>
+          <div class="flex items-center gap-3">
+          <img src="assets/Interfaz/Servicios.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
           <h1 class="page-title">Administración de Negocios</h1>
-          <p class="text-text-secondary text-sm">Gestiona todos los negocios registrados en Agéndalo</p>
+        </div>
         </div>
         <a routerLink="/admin-plataforma" class="btn-secondary">← Volver</a>
       </div>
@@ -133,3 +135,4 @@ export class BusinessListComponent implements OnInit {
     }
   }
 }
+
