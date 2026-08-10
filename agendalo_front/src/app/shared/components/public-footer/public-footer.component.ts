@@ -72,7 +72,7 @@ import { RouterLink } from '@angular/router';
             <h2 class="text-sm font-bold text-white">Contacto</h2>
             <ul class="mt-5 space-y-3 text-sm">
               <li><a href="mailto:contacto@skedia.cl" class="footer-link">Contacto comercial</a></li>
-              <li><a href="mailto:soporte@skedia.cl" class="footer-link">Soporte tecnico</a></li>
+              <li><a href="mailto:soporte@skedia.cl" class="footer-link">Soporte técnico</a></li>
               <li><a href="mailto:contacto@skedia.cl?subject=Demo%20Skedia" class="footer-link">Agenda una demo</a></li>
             </ul>
           </nav>
@@ -80,8 +80,8 @@ import { RouterLink } from '@angular/router';
           <nav aria-label="Legal">
             <h2 class="text-sm font-bold text-white">Legal</h2>
             <ul class="mt-5 space-y-3 text-sm">
-              <li><a href="mailto:contacto@skedia.cl?subject=Terminos%20y%20condiciones" class="footer-link">Terminos y condiciones</a></li>
-              <li><a href="mailto:contacto@skedia.cl?subject=Politica%20de%20privacidad" class="footer-link">Politica de privacidad</a></li>
+              <li><a href="mailto:contacto@skedia.cl?subject=Terminos%20y%20condiciones" class="footer-link">Términos y condiciones</a></li>
+              <li><a href="mailto:contacto@skedia.cl?subject=Politica%20de%20privacidad" class="footer-link">Política de privacidad</a></li>
               <li><a href="mailto:soporte@skedia.cl?subject=Seguridad%20Skedia" class="footer-link">Seguridad</a></li>
             </ul>
           </nav>
