@@ -29,7 +29,7 @@ interface NavItem {
           <p class="text-white text-base font-semibold truncate">{{ businessName() }}</p>
         </div>
 
-        <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+        <nav class="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
           @for (item of navItems(); track item.route) {
             <a
               [routerLink]="item.route"
@@ -38,8 +38,8 @@ interface NavItem {
               class="sidebar-link"
             >
               @if (item.iconPath) {
-                <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  <img [src]="item.iconPath" alt="" class="w-9 h-9 object-cover" aria-hidden="true">
+                <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <img [src]="item.iconPath" alt="" class="w-7 h-7 object-contain" aria-hidden="true">
                 </span>
               } @else {
                 <span class="text-xl">{{ item.icon }}</span>
@@ -94,7 +94,7 @@ interface NavItem {
               <p class="text-white text-base font-semibold truncate">{{ businessName() }}</p>
             </div>
 
-            <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+            <nav class="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
               @for (item of navItems(); track item.route) {
                 <a
                   [routerLink]="item.route"
@@ -104,8 +104,8 @@ interface NavItem {
                   (click)="closeMobileMenu()"
                 >
                   @if (item.iconPath) {
-                    <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      <img [src]="item.iconPath" alt="" class="w-9 h-9 object-cover" aria-hidden="true">
+                    <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <img [src]="item.iconPath" alt="" class="w-7 h-7 object-contain" aria-hidden="true">
                     </span>
                   } @else {
                     <span class="text-xl">{{ item.icon }}</span>
