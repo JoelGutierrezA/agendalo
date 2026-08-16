@@ -34,7 +34,7 @@ import { PublicFooterComponent } from '../../../../shared/components/public-foot
         <div class="w-full max-w-sm py-10">
           <div class="text-center mb-8">
             <div class="flex justify-center h-12 mb-4">
-              <img src="assets/Skedia_sf.png" alt="Skedia" class="h-full w-auto">
+              <img src="assets/Skedia%20Fondo%20Blanco.png" alt="Skedia" class="h-full w-auto object-contain">
             </div>
             <h1 class="text-2xl font-bold text-text-primary">Bienvenido a Skedia</h1>
             <p class="text-text-secondary mt-1">Inicia sesion para gestionar tu negocio</p>
