@@ -49,7 +49,7 @@ interface RegisterPlan {
               {{ step === 'account' ? 'Crea tu cuenta' : 'Elige tu plan' }}
             </h1>
             <p class="text-text-secondary mt-1">
-              {{ step === 'account' ? 'Primero registra tus datos. La cuenta se crea despues del pago.' : 'Pago mock: al confirmar se creara tu cuenta.' }}
+              {{ step === 'account' ? 'Primero registra tus datos. La cuenta quedara pendiente despues del pago.' : 'Pago mock: al confirmar enviaremos tu solicitud.' }}
             </p>
           </div>
 
@@ -171,7 +171,7 @@ interface RegisterPlan {
               <div class="mt-5 rounded-lg border border-dashed border-primary/40 bg-primary-light/40 p-4">
                 <p class="font-semibold text-text-primary">Pasarela de pago mock</p>
                 <p class="text-sm text-text-secondary mt-1">
-                  Por ahora no se cobrara nada. Al presionar pagar simulamos el pago aprobado y recien ahi creamos la cuenta.
+                  Por ahora no se cobrara nada. Al presionar pagar simulamos el pago y dejamos tu cuenta pendiente de aprobacion.
                 </p>
 
                 <ul class="mt-3 space-y-2 text-sm text-text-secondary">
@@ -200,7 +200,7 @@ interface RegisterPlan {
                   [disabled]="step === 'account' || loading"
                 >
                   @if (loading) {
-                    Creando cuenta...
+                    Enviando solicitud...
                   } @else {
                     Pagar y crear cuenta
                   }
@@ -295,15 +295,15 @@ export class RegisterComponent {
 
     this.loading = true;
 
-    this.authService.register({
+    this.authService.registerPending({
       name,
       email,
       password,
       password_confirmation: password,
     }).subscribe({
-      next: () => {
-        this.toastService.success(`Pago mock aprobado. Cuenta creada en plan ${this.currentPlan.name}.`);
-        this.router.navigate(['/onboarding']);
+      next: (res) => {
+        this.toastService.success(`${res.message} Plan solicitado: ${this.currentPlan.name}.`, 7000);
+        this.router.navigate(['/login']);
       },
       error: (err) => {
         this.toastService.error(err?.message ?? 'No se pudo crear la cuenta');

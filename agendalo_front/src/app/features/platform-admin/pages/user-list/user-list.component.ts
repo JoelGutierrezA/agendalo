@@ -64,42 +64,61 @@ import { PlatformService } from '../../services/platform.service';
                     <td class="p-4 text-xs font-semibold">
                       <span
                         class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
-                        [class]="user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                        [class]="statusClass(user)"
                       >
-                        <span class="w-2 h-2 rounded-full" [class]="user.is_active ? 'bg-green-500' : 'bg-red-500'"></span>
-                        {{ user.is_active ? 'Activo' : 'Inactivo' }}
+                        <span class="w-2 h-2 rounded-full" [class]="statusDotClass(user)"></span>
+                        {{ statusLabel(user) }}
                       </span>
                     </td>
                     <td class="p-4 text-right">
                       @if (user.role !== 'admin_platform') {
                         <div class="flex flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            (click)="toggleStatus(user)"
-                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
-                            [disabled]="deletingUserId === user.id"
-                            [attr.aria-label]="user.is_active ? 'Dar de baja usuario' : 'Dar de alta usuario'"
-                            [title]="user.is_active ? 'Dar de baja' : 'Dar de alta'"
-                            [class]="user.is_active ? 'text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300' : 'text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300'"
-                          >
-                            @if (user.is_active) {
-                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M12 2v10"></path>
-                                <path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>
-                              </svg>
-                            } @else {
-                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M20 6 9 17l-5-5"></path>
-                              </svg>
-                            }
-                          </button>
+                          @if (isPendingUser(user)) {
+                            <button
+                              type="button"
+                              (click)="approveUser(user)"
+                              class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                              [disabled]="updatingUserId === user.id || deletingUserId === user.id"
+                              aria-label="Aceptar usuario"
+                              title="Aceptar"
+                            >
+                              @if (updatingUserId === user.id) {
+                                <span class="h-4 w-4 rounded-full border-2 border-green-200 border-t-green-700 animate-spin" aria-hidden="true"></span>
+                              } @else {
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                  <path d="M20 6 9 17l-5-5"></path>
+                                </svg>
+                              }
+                            </button>
+                          } @else {
+                            <button
+                              type="button"
+                              (click)="toggleStatus(user)"
+                              class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
+                              [disabled]="updatingUserId === user.id || deletingUserId === user.id"
+                              [attr.aria-label]="user.is_active ? 'Dar de baja usuario' : 'Dar de alta usuario'"
+                              [title]="user.is_active ? 'Dar de baja' : 'Dar de alta'"
+                              [class]="user.is_active ? 'text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300' : 'text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300'"
+                            >
+                              @if (user.is_active) {
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                  <path d="M12 2v10"></path>
+                                  <path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>
+                                </svg>
+                              } @else {
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                  <path d="M20 6 9 17l-5-5"></path>
+                                </svg>
+                              }
+                            </button>
+                          }
                           <button
                             type="button"
                             (click)="deleteUser(user)"
                             class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                            [disabled]="deletingUserId === user.id"
-                            aria-label="Eliminar usuario"
-                            title="Eliminar"
+                            [disabled]="updatingUserId === user.id || deletingUserId === user.id"
+                            [attr.aria-label]="isPendingUser(user) ? 'Rechazar usuario' : 'Eliminar usuario'"
+                            [title]="isPendingUser(user) ? 'Rechazar' : 'Eliminar'"
                           >
                             @if (deletingUserId === user.id) {
                               <span class="h-4 w-4 rounded-full border-2 border-red-200 border-t-red-700 animate-spin" aria-hidden="true"></span>
@@ -147,6 +166,7 @@ export class UserListComponent implements OnInit {
   currentPage = 1;
   lastPage = 1;
   deletingUserId: string | null = null;
+  updatingUserId: string | null = null;
 
   constructor(
     private platformService: PlatformService,
@@ -176,20 +196,42 @@ export class UserListComponent implements OnInit {
     const action = user.is_active ? 'desactivar' : 'activar';
     if (!confirm(`Estas seguro de que deseas ${action} el acceso de ${user.name}?`)) return;
 
+    this.updatingUserId = user.id;
     this.platformService.toggleUserStatus(user.id).subscribe({
       next: () => {
         user.is_active = !user.is_active;
         this.toastService.success(`Usuario ${user.is_active ? 'activado' : 'desactivado'}.`);
+        this.updatingUserId = null;
       },
       error: (err) => {
         this.toastService.error(err?.message ?? 'No se pudo actualizar el usuario');
+        this.updatingUserId = null;
+      },
+    });
+  }
+
+  approveUser(user: any): void {
+    if (!confirm(`Aceptar la solicitud de ${user.name}? Desde ese momento podra iniciar sesion.`)) return;
+
+    this.updatingUserId = user.id;
+    this.platformService.approveUser(user.id).subscribe({
+      next: () => {
+        user.is_active = true;
+        this.toastService.success('Usuario aprobado. Ya puede iniciar sesion.');
+        this.updatingUserId = null;
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo aprobar el usuario');
+        this.updatingUserId = null;
       },
     });
   }
 
   deleteUser(user: any): void {
     const confirmed = confirm(
-      `Esta accion eliminara definitivamente la cuenta de ${user.name} (${user.email}) y sus datos asociados. Esta accion no se puede deshacer.`
+      this.isPendingUser(user)
+        ? `Rechazar y eliminar la solicitud de ${user.name} (${user.email})? Esta accion no se puede deshacer.`
+        : `Esta accion eliminara definitivamente la cuenta de ${user.name} (${user.email}) y sus datos asociados. Esta accion no se puede deshacer.`
     );
 
     if (!confirmed) return;
@@ -198,7 +240,7 @@ export class UserListComponent implements OnInit {
     this.platformService.deleteUser(user.id).subscribe({
       next: () => {
         this.users = this.users.filter(current => current.id !== user.id);
-        this.toastService.success('Usuario eliminado definitivamente.');
+        this.toastService.success(this.isPendingUser(user) ? 'Solicitud rechazada.' : 'Usuario eliminado definitivamente.');
 
         if (this.users.length === 0 && this.currentPage > 1) {
           this.loadPage(this.currentPage - 1);
@@ -212,5 +254,24 @@ export class UserListComponent implements OnInit {
         this.deletingUserId = null;
       },
     });
+  }
+
+  isPendingUser(user: any): boolean {
+    return !user.is_active && !user.business_id;
+  }
+
+  statusLabel(user: any): string {
+    if (this.isPendingUser(user)) return 'Pendiente';
+    return user.is_active ? 'Activo' : 'Inactivo';
+  }
+
+  statusClass(user: any): string {
+    if (this.isPendingUser(user)) return 'bg-amber-100 text-amber-700';
+    return user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+  }
+
+  statusDotClass(user: any): string {
+    if (this.isPendingUser(user)) return 'bg-amber-500';
+    return user.is_active ? 'bg-green-500' : 'bg-red-500';
   }
 }

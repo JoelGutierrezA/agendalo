@@ -117,6 +117,20 @@ export class PlatformService {
     });
   }
 
+  approveUser(id: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client
+        .from('profiles')
+        .update({ is_active: true })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) throw new Error(error.message);
+      return { success: true, data };
+    });
+  }
+
   deleteUser(id: string): Observable<any> {
     return defer(async () => {
       const { data: sessionData, error: sessionError } = await this.supabase.client.auth.getSession();

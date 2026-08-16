@@ -25,16 +25,22 @@ export class AuthService {
   }
 
   login(payload: LoginRequest): Observable<AuthResponse> {
-    return from(this.supabase.client.auth.signInWithPassword(payload)).pipe(
-      switchMap(({ data, error }) => {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.auth.signInWithPassword(payload);
+
         if (error || !data.session || !data.user) {
           throw new Error(error?.message ?? 'No se pudo iniciar sesion');
         }
 
-        return from(this.getProfile(data.user.id)).pipe(
-          map(user => this.buildAuthResponse(user, data.session.access_token))
-        );
-      }),
+      const user = await this.getProfile(data.user.id);
+      if (!user.is_active) {
+        await this.supabase.client.auth.signOut();
+        this.clearSession();
+        throw new Error('Tu cuenta esta pendiente de aprobacion. Te avisaremos cuando este activa.');
+      }
+
+      return this.buildAuthResponse(user, data.session.access_token);
+    }).pipe(
       tap(response => this.saveSession(response))
     );
   }
@@ -62,6 +68,40 @@ export class AuthService {
       }),
       tap(response => this.saveSession(response))
     );
+  }
+
+  registerPending(payload: RegisterRequest): Observable<{ message: string }> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.auth.signUp({
+        email: payload.email,
+        password: payload.password,
+        options: {
+          data: { name: payload.name },
+        },
+      });
+
+      if (error || !data.user) {
+        throw new Error(error?.message ?? 'No se pudo crear la cuenta');
+      }
+
+      if (data.session) {
+        const { error: profileError } = await this.supabase.client
+          .from('profiles')
+          .update({ is_active: false })
+          .eq('id', data.user.id);
+
+        if (profileError) {
+          throw new Error(profileError.message);
+        }
+
+        await this.supabase.client.auth.signOut();
+        this.clearSession();
+      }
+
+      return {
+        message: 'Solicitud creada. Un administrador debe aprobar tu cuenta antes de ingresar.',
+      };
+    });
   }
 
   logout(): Observable<void> {
@@ -153,6 +193,12 @@ export class AuthService {
 
   private async loadProfile(userId: string, accessToken: string): Promise<void> {
     const user = await this.getProfile(userId);
+    if (!user.is_active) {
+      await this.supabase.client.auth.signOut();
+      this.clearSession();
+      return;
+    }
+
     this.saveSession(this.buildAuthResponse(user, accessToken));
   }
 
