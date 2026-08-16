@@ -61,15 +61,18 @@ interface ServicePublic {
         <div class="bg-white rounded-2xl shadow-sm border border-border overflow-hidden">
           <div class="flex border-b border-border bg-gray-50/50">
             <div class="flex-1 text-center py-3 text-sm font-medium transition-colors"
-                 [class.text-primary]="step >= 1" [class.border-b-2]="step === 1" [class.border-primary]="step === 1">
+                 [class]="step >= 1 ? 'text-primary' : 'text-slate-500'"
+                 [class.border-b-2]="step === 1" [class.border-primary]="step === 1">
               1. Servicio
             </div>
             <div class="flex-1 text-center py-3 text-sm font-medium transition-colors border-l border-border"
-                 [class.text-primary]="step >= 2" [class.border-b-2]="step === 2" [class.border-primary]="step === 2">
+                 [class]="step >= 2 ? 'text-primary' : 'text-slate-500'"
+                 [class.border-b-2]="step === 2" [class.border-primary]="step === 2">
               2. Fecha y hora
             </div>
             <div class="flex-1 text-center py-3 text-sm font-medium transition-colors border-l border-border"
-                 [class.text-primary]="step >= 3" [class.border-b-2]="step === 3" [class.border-primary]="step === 3">
+                 [class]="step >= 3 ? 'text-primary' : 'text-slate-500'"
+                 [class.border-b-2]="step === 3" [class.border-primary]="step === 3">
               3. Tus datos
             </div>
           </div>

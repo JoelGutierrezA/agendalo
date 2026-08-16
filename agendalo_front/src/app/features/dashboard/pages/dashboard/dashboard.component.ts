@@ -32,18 +32,35 @@ export type ChartOptions = {
   template: `
     <div class="space-y-6 fade-in">
       <!-- Page Header -->
-      <div class="page-header">
-        <div>
+      <div class="page-header flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="sm:hidden grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-white px-3 text-sm font-semibold text-text-primary transition-colors hover:border-primary/40 hover:text-primary"
+            (click)="copyBookingLink()"
+          >
+            {{ copyLinkLabel }}
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-white px-3 text-sm font-semibold text-text-primary transition-colors hover:border-primary/40 hover:text-primary"
+            (click)="openQrModal()"
+          >
+            Generar QR
+          </button>
+        </div>
+
+        <div class="min-w-0">
           <div class="flex items-center gap-3">
             <img src="assets/Interfaz/Dashboard.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
             <h1 class="page-title">Finanzas</h1>
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" class="btn-secondary" (click)="openTransactionModal('Ingresos')">
+        <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <button type="button" class="btn-secondary min-h-11 justify-center px-3 text-xs leading-tight sm:text-sm" (click)="openTransactionModal('Ingresos')">
             + Registrar ingreso
           </button>
-          <button type="button" class="btn-primary" (click)="openTransactionModal('Egresos')">
+          <button type="button" class="btn-primary min-h-11 justify-center px-3 text-xs leading-tight sm:text-sm" (click)="openTransactionModal('Egresos')">
             + Registrar egreso
           </button>
         </div>
@@ -249,6 +266,45 @@ export type ChartOptions = {
           </div>
         </div>
       }
+
+      @if (showQrModal) {
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <button
+            type="button"
+            class="absolute inset-0"
+            aria-label="Cerrar QR"
+            (click)="closeQrModal()"
+          ></button>
+
+          <div class="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl animate-fade-in-up">
+            <div class="flex items-center justify-between gap-4 mb-5">
+              <h2 class="text-lg font-bold text-text-primary">QR para tomar citas</h2>
+              <button
+                type="button"
+                class="w-9 h-9 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-gray-50"
+                aria-label="Cerrar QR"
+                (click)="closeQrModal()"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div class="mx-auto relative w-72 h-72 max-w-full rounded-2xl border border-border bg-white p-4">
+              <img [src]="qrImageUrl()" alt="QR para tomar citas" class="w-full h-full object-contain">
+              <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="w-16 h-16 rounded-2xl bg-white shadow-lg border border-border flex items-center justify-center p-2">
+                  <img src="assets/Icono%20Skedia%201.png" alt="Skedia" class="w-full h-full object-contain rounded-xl">
+                </div>
+              </div>
+            </div>
+
+            <p class="mt-4 text-sm text-text-secondary break-all">{{ publicBookingUrl() }}</p>
+            <button type="button" class="btn-primary w-full justify-center mt-5" (click)="copyBookingLink()">
+              {{ copyLinkLabel }}
+            </button>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -263,8 +319,10 @@ export class DashboardComponent implements OnInit {
   categories: ExpenseCategory[] = [];
   showTxModal = false;
   showCatModal = false;
+  showQrModal = false;
   saving = false;
   newCatName = '';
+  copyLinkLabel = 'Copiar enlace';
   txForm: FormGroup;
 
   kpis: any[] = [
@@ -296,6 +354,74 @@ export class DashboardComponent implements OnInit {
     this.initChart();
     this.loadData();
     void this.loadCategories();
+  }
+
+  async copyBookingLink(): Promise<void> {
+    const url = this.publicBookingUrl();
+    if (!url) {
+      this.temporarilySetCopyLabel('Sin enlace disponible');
+      return;
+    }
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+      } else if (!this.copyWithFallback(url)) {
+        throw new Error('Clipboard unavailable');
+      }
+
+      this.temporarilySetCopyLabel('Enlace copiado');
+    } catch {
+      this.temporarilySetCopyLabel('No se pudo copiar');
+    }
+  }
+
+  openQrModal(): void {
+    if (!this.publicBookingUrl()) {
+      this.temporarilySetCopyLabel('Sin enlace disponible');
+      return;
+    }
+
+    this.showQrModal = true;
+  }
+
+  closeQrModal(): void {
+    this.showQrModal = false;
+  }
+
+  qrImageUrl(): string {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=18&data=${encodeURIComponent(this.publicBookingUrl())}`;
+  }
+
+  publicBookingUrl(): string {
+    const slug = this.businessService.currentBusiness()?.slug;
+    if (!slug || typeof window === 'undefined') return '';
+    return `${window.location.origin}/negocio/${slug}`;
+  }
+
+  private copyWithFallback(text: string): boolean {
+    if (typeof document === 'undefined') return false;
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      return document.execCommand('copy');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+
+  private temporarilySetCopyLabel(label: string): void {
+    this.copyLinkLabel = label;
+    setTimeout(() => {
+      this.copyLinkLabel = 'Copiar enlace';
+    }, 1800);
   }
 
   private initChart(): void {
