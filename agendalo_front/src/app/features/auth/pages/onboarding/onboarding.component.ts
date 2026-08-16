@@ -14,7 +14,7 @@ import { ToastService } from '../../../../core/services/toast.service';
       <div class="w-full max-w-lg">
         <div class="text-center mb-8">
           <div class="flex justify-center h-12 mb-4">
-            <img src="assets/Skedia_sf.png" alt="Skedia" class="h-full w-auto">
+            <img src="assets/Skedia%20Fondo%20Blanco.png" alt="Skedia" class="h-full w-auto object-contain">
           </div>
           <h1 class="text-2xl font-bold text-text-primary">Configura tu negocio</h1>
           <p class="text-text-secondary mt-1">Esta información aparecerá en tu página pública de reservas</p>
