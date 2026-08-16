@@ -14,14 +14,14 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   template: `
-    <div>
-      <div class="page-header">
+    <div class="space-y-5">
+      <div class="page-header flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <div class="flex items-center gap-3">
           <img src="assets/Interfaz/Configuraci%C3%B3n.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
           <h1 class="page-title">Configuración</h1>
         </div>
         <button
-          class="btn-primary"
+          class="btn-primary w-full justify-center sm:w-auto"
           [disabled]="loading || logoUploading || saveSuccess"
           (click)="onSave()"
         >
@@ -37,28 +37,30 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
         </div>
       }
 
-      <div class="flex gap-1 mb-5 border-b border-border">
+      <div class="-mx-6 px-6 overflow-x-auto border-b border-border sm:mx-0 sm:px-0">
+        <div class="flex min-w-max gap-1">
         @for (tab of filteredTabs; track tab.id) {
           <button
             (click)="activeTab = tab.id"
-            class="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors"
+            class="flex items-center gap-2 px-3 py-2.5 text-sm font-medium transition-colors whitespace-nowrap sm:px-4"
             [class]="activeTab === tab.id ? 'text-primary border-b-2 border-primary' : 'text-text-secondary hover:text-text-primary'"
           >
             <span>{{ tab.icon }}</span> {{ tab.label }}
           </button>
         }
+        </div>
       </div>
 
       <!-- Tab: Datos del negocio -->
       @if (activeTab === 'business') {
-        <div class="card">
+        <div class="card p-4 sm:p-6">
           <h3 class="mb-4">Datos del negocio</h3>
           @if (dataLoading) {
             <p class="text-text-secondary text-sm">Cargando datos...</p>
           } @else {
             <form [formGroup]="businessForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border border-border bg-gray-50/50">
-                <div class="w-20 h-20 rounded-2xl bg-primary-light text-primary flex items-center justify-center text-2xl font-bold overflow-hidden flex-shrink-0">
+              <div class="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-lg border border-border bg-gray-50/50">
+                <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary-light text-primary flex items-center justify-center text-2xl font-bold overflow-hidden flex-shrink-0">
                   @if (logoPreviewUrl) {
                     <img [src]="logoPreviewUrl" alt="Icono del negocio" class="w-full h-full object-cover">
                   } @else {
@@ -66,16 +68,16 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
                   }
                 </div>
 
-                <div class="flex-1">
+                <div class="flex-1 min-w-0">
                   <label class="form-label">Icono del negocio</label>
                   <p class="text-xs text-text-secondary mb-3">Usa una imagen cuadrada en PNG, JPG o WebP de máximo 1 MB. Se mostrará en tu página de reservas.</p>
                   <div class="flex flex-wrap gap-2">
                     <input #logoInput type="file" class="hidden" accept="image/png,image/jpeg,image/webp" (change)="onLogoSelected($event)" />
-                    <button type="button" class="btn-secondary" (click)="logoInput.click()" [disabled]="logoUploading">
+                    <button type="button" class="btn-secondary flex-1 justify-center sm:flex-none" (click)="logoInput.click()" [disabled]="logoUploading">
                       {{ logoUploading ? 'Subiendo...' : 'Subir imagen' }}
                     </button>
                     @if (logoPreviewUrl) {
-                      <button type="button" class="btn-secondary" (click)="removeLogo()" [disabled]="logoUploading">
+                      <button type="button" class="btn-secondary flex-1 justify-center sm:flex-none" (click)="removeLogo()" [disabled]="logoUploading">
                         Quitar imagen
                       </button>
                     }
@@ -130,28 +132,30 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
 
       <!-- Tab: Horarios -->
       @if (activeTab === 'hours') {
-        <div class="card">
+        <div class="card p-4 sm:p-6">
           <h3 class="mb-4">Horario de atención</h3>
           @for (day of days; track day.name) {
-            <div class="flex items-center gap-4 py-3 border-b border-border last:border-0">
-              <div class="w-24 flex-shrink-0">
+            <div class="grid grid-cols-1 gap-2 py-3 border-b border-border last:border-0 sm:grid-cols-[7rem_1fr] sm:gap-4">
+              <div class="sm:w-28 flex-shrink-0">
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" [(ngModel)]="day.open" [ngModelOptions]="{standalone: true}" class="w-4 h-4 accent-primary" />
                   <span class="text-sm font-medium">{{ day.name }}</span>
                 </label>
               </div>
               @if (day.open) {
-                <select class="form-input w-32" [(ngModel)]="day.open_time" [ngModelOptions]="{standalone: true}">
-                  @for (time of timeOptions; track time) {
-                    <option [value]="time">{{ time }}</option>
-                  }
-                </select>
-                <span class="text-text-secondary text-sm">hasta</span>
-                <select class="form-input w-32" [(ngModel)]="day.close_time" [ngModelOptions]="{standalone: true}">
-                  @for (time of timeOptions; track time) {
-                    <option [value]="time">{{ time }}</option>
-                  }
-                </select>
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:gap-3">
+                  <select class="form-input w-full sm:w-32" [(ngModel)]="day.open_time" [ngModelOptions]="{standalone: true}">
+                    @for (time of timeOptions; track time) {
+                      <option [value]="time">{{ time }}</option>
+                    }
+                  </select>
+                  <span class="text-text-secondary text-sm text-center">hasta</span>
+                  <select class="form-input w-full sm:w-32" [(ngModel)]="day.close_time" [ngModelOptions]="{standalone: true}">
+                    @for (time of timeOptions; track time) {
+                      <option [value]="time">{{ time }}</option>
+                    }
+                  </select>
+                </div>
               } @else {
                 <span class="text-text-secondary text-sm italic">Cerrado</span>
               }
@@ -163,20 +167,20 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
 
       <!-- Tab: Reservas -->
       @if (activeTab === 'booking') {
-        <div class="card">
+        <div class="card p-4 sm:p-6">
           <h3 class="mb-4">Configuración de reservas</h3>
           <div class="space-y-4">
             <div>
               <label class="form-label">Días disponibles para reservar con anticipación</label>
-              <input type="number" class="form-input w-32" value="30" min="1" max="365" />
+              <input type="number" class="form-input w-full sm:w-32" value="30" min="1" max="365" />
               <p class="text-xs text-text-secondary mt-1">Los clientes podrán reservar hasta X días en el futuro</p>
             </div>
             <div>
               <label class="form-label">Horas mínimas de anticipación</label>
-              <input type="number" class="form-input w-32" value="1" min="0" />
+              <input type="number" class="form-input w-full sm:w-32" value="1" min="0" />
             </div>
-            <div class="flex items-center gap-3">
-              <input type="checkbox" class="w-4 h-4 accent-primary" id="require-confirmation" />
+            <div class="flex items-start gap-3">
+              <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary flex-shrink-0" id="require-confirmation" />
               <label for="require-confirmation" class="text-sm text-text-primary cursor-pointer">
                 Requiero confirmar reservas manualmente antes de que queden activas
               </label>
@@ -188,7 +192,7 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
 
       <!-- Tab: Google Calendar -->
       @if (activeTab === 'calendar') {
-        <div class="card">
+        <div class="card p-4 sm:p-6">
           <h3 class="mb-2">Google Calendar</h3>
           <p class="text-text-secondary text-sm mb-5">Sincroniza tus citas automáticamente con tu Google Calendar</p>
 
@@ -196,14 +200,14 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
             <p class="text-text-secondary text-sm">Consultando estado de integración...</p>
           } @else {
             <div
-              class="p-5 rounded-xl border flex items-start gap-4"
+              class="p-4 sm:p-5 rounded-lg border flex items-start gap-3 sm:gap-4"
               [ngClass]="googleStatus?.connected ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'"
             >
               <span class="text-3xl flex-shrink-0">📅</span>
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 @if (googleStatus?.connected) {
                   <p class="font-medium text-emerald-900">Conectado</p>
-                  <p class="text-emerald-700 text-sm mt-1">
+                  <p class="text-emerald-700 text-sm mt-1 break-all">
                     Cuenta: <strong>{{ googleStatus?.google_email || 'Google Account' }}</strong>
                   </p>
                 } @else {
@@ -213,13 +217,13 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
               </div>
             </div>
 
-            <div class="mt-5 flex flex-wrap items-center gap-3">
+            <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               @if (googleStatus?.connected) {
-                <button class="btn-secondary" (click)="disconnectGoogle()" [disabled]="calendarLoading">
+                <button class="btn-secondary justify-center" (click)="disconnectGoogle()" [disabled]="calendarLoading">
                   Desconectar Google Calendar
                 </button>
               } @else {
-                <button class="btn-primary" (click)="connectGoogle()" [disabled]="calendarLoading">
+                <button class="btn-primary justify-center" (click)="connectGoogle()" [disabled]="calendarLoading">
                   Conectar con Google Calendar
                 </button>
               }
