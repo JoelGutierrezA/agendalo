@@ -181,6 +181,11 @@ export class AppointmentsService {
       payload.scheduled_at,
       service.duration_minutes
     );
+    await this.assertWithinOpeningHours(
+      business.id,
+      payload.scheduled_at,
+      service.duration_minutes
+    );
 
     const { data, error } = await this.supabase.client
       .from('appointments')
@@ -223,6 +228,13 @@ export class AppointmentsService {
       service.duration_minutes,
       id
     );
+    if (payload.status !== 'cancelled') {
+      await this.assertWithinOpeningHours(
+        business.id,
+        payload.scheduled_at,
+        service.duration_minutes
+      );
+    }
 
     const { data, error } = await this.supabase.client
       .from('appointments')
@@ -396,6 +408,55 @@ export class AppointmentsService {
     }
   }
 
+  private async assertWithinOpeningHours(
+    businessId: number,
+    scheduledAt: string,
+    durationMinutes: number
+  ): Promise<void> {
+    const [{ data: settings, error: settingsError }, { data: openingHours, error: hoursError }] = await Promise.all([
+      this.supabase.client
+        .from('business_settings')
+        .select('time_zone')
+        .eq('business_id', businessId)
+        .maybeSingle(),
+      this.supabase.client
+        .from('opening_hours')
+        .select('day_of_week, is_open, open_time, close_time')
+        .eq('business_id', businessId),
+    ]);
+
+    if (settingsError) throw new Error(settingsError.message);
+    if (hoursError) throw new Error(hoursError.message);
+
+    const timezone = settings?.time_zone || 'America/Santiago';
+    const start = new Date(scheduledAt);
+    const end = new Date(start);
+    end.setMinutes(end.getMinutes() + Math.max(0, durationMinutes));
+
+    const localStart = this.getBusinessDateParts(start, timezone);
+    const localEnd = this.getBusinessDateParts(end, timezone);
+    const schedule = (openingHours ?? []).find((item: any) => Number(item.day_of_week) === localStart.dayOfWeek);
+
+    if (!schedule || !schedule.is_open) {
+      throw new Error('La cita esta fuera del horario de atencion configurado para el negocio.');
+    }
+
+    if (!schedule.open_time || !schedule.close_time) {
+      return;
+    }
+
+    if (localStart.dateKey !== localEnd.dateKey) {
+      throw new Error('La cita esta fuera del horario de atencion configurado para el negocio.');
+    }
+
+    const openMinutes = this.toMinutes(String(schedule.open_time).slice(0, 5));
+    const closeMinutes = this.toMinutes(String(schedule.close_time).slice(0, 5));
+
+    if (localStart.minutes < openMinutes || localEnd.minutes > closeMinutes) {
+      throw new Error('La cita esta fuera del horario de atencion configurado para el negocio.');
+    }
+  }
+
   private async registerCompletedIncome(appointment: AppointmentRow, previousStatus: AppointmentStatus | null): Promise<void> {
     if (appointment.status !== 'completed' || previousStatus === 'completed') return;
 
@@ -444,6 +505,41 @@ export class AppointmentsService {
       no_show: '#94A3B8',
     };
     return colors[status] ?? '#94A3B8';
+  }
+
+  private getBusinessDateParts(date: Date, timezone: string): { dayOfWeek: number; minutes: number; dateKey: string } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+
+    const value = (type: string) => parts.find(part => part.type === type)?.value ?? '';
+    const weekdays: Record<string, number> = {
+      Sunday: 0,
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
+    };
+
+    return {
+      dayOfWeek: weekdays[value('weekday')],
+      minutes: (Number(value('hour')) * 60) + Number(value('minute')),
+      dateKey: `${value('year')}-${value('month')}-${value('day')}`,
+    };
+  }
+
+  private toMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return (hours * 60) + minutes;
   }
 
   private requireBusiness() {

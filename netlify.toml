@@ -1,0 +1,9 @@
+[build]
+  base = "agendalo_front"
+  command = "npm run build"
+  publish = "dist/agendalo-front/browser"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

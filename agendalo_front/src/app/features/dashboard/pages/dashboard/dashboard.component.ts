@@ -1,9 +1,17 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
 import { NgApexchartsModule, ApexAxisChartSeries, ApexChart, ApexXAxis, ApexDataLabels, ApexTooltip, ApexStroke, ApexYAxis, ApexFill, ApexGrid } from "ng-apexcharts";
-import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { DashboardService, DashboardSummary } from '../../../../core/services/dashboard.service';
+import { BusinessService } from '../../../settings/services/business.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
+
+interface ExpenseCategory {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
 
 export type ChartOptions = {
   series: ApexAxisChartSeries;
@@ -20,7 +28,7 @@ export type ChartOptions = {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, NgApexchartsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterModule, NgApexchartsModule],
   template: `
     <div class="space-y-6 fade-in">
       <!-- Page Header -->
@@ -28,8 +36,16 @@ export type ChartOptions = {
         <div>
           <div class="flex items-center gap-3">
             <img src="assets/Interfaz/Dashboard.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
-            <h1 class="page-title">Dashboard</h1>
+            <h1 class="page-title">Finanzas</h1>
           </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="btn-secondary" (click)="openTransactionModal('Ingresos')">
+            + Registrar ingreso
+          </button>
+          <button type="button" class="btn-primary" (click)="openTransactionModal('Egresos')">
+            + Registrar egreso
+          </button>
         </div>
       </div>
 
@@ -145,12 +161,111 @@ export type ChartOptions = {
           }
         </div>
       </div>
+
+      @if (showTxModal) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
+            <div class="px-6 py-4 border-b border-border flex justify-between items-center bg-gray-50/50">
+              <h3 class="text-lg font-bold text-text-primary">Registrar {{ activeFinanceType.slice(0, -1) }}</h3>
+              <button type="button" (click)="closeModals()" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-2 leading-none">&times;</button>
+            </div>
+
+            <form [formGroup]="txForm" (ngSubmit)="saveTransaction()" class="p-6 space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="form-label">Monto (CLP) *</label>
+                  <input type="number" formControlName="amount" class="form-input text-lg font-bold" placeholder="0" />
+                </div>
+                <div>
+                  <label class="form-label">Fecha *</label>
+                  <input type="date" formControlName="recorded_at" class="form-input" />
+                </div>
+              </div>
+
+              <div>
+                <label class="form-label">Descripcion breve *</label>
+                <input type="text" formControlName="description" class="form-input" placeholder="Ej: Pago de cliente, insumos, etc." />
+              </div>
+
+              @if (activeFinanceType === 'Egresos') {
+                <div>
+                  <label class="form-label">Categoria *</label>
+                  <div class="flex gap-2">
+                    <select formControlName="category_id" class="form-input flex-1">
+                      <option value="">Seleccione...</option>
+                      @for (cat of categories; track cat.id) {
+                        <option [value]="cat.id">{{ cat.name }}</option>
+                      }
+                    </select>
+                    <button type="button" class="btn-secondary px-3" (click)="openCategoryModal()" title="Gestionar categorias">+</button>
+                  </div>
+                </div>
+              }
+
+              <div>
+                <label class="form-label">Notas adicionales</label>
+                <textarea formControlName="notes" class="form-input" rows="2" placeholder="Detalles de factura, medio de pago..."></textarea>
+              </div>
+
+              <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-border">
+                <button type="button" class="btn-secondary" (click)="closeModals()">Cancelar</button>
+                <button type="submit" class="btn-primary" [disabled]="saving">
+                  {{ saving ? 'Guardando...' : 'Guardar' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
+
+      @if (showCatModal) {
+        <div class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
+            <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+              <h3 class="font-bold">Categorias de Egresos</h3>
+              <button type="button" (click)="showCatModal = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+
+            <div class="p-6">
+              <div class="flex gap-2 mb-6">
+                <input type="text" [(ngModel)]="newCatName" class="form-input flex-1" placeholder="Nueva categoria..." />
+                <button type="button" class="btn-primary" (click)="saveCategory()" [disabled]="!newCatName.trim() || saving">Anadir</button>
+              </div>
+
+              <div class="border border-border rounded-lg max-h-60 overflow-y-auto">
+                <ul class="divide-y divide-border">
+                  @for (cat of categories; track cat.id) {
+                    <li class="flex justify-between items-center p-3 hover:bg-gray-50">
+                      <span class="text-sm font-medium">{{ cat.name }}</span>
+                      <button type="button" class="text-red-500 hover:text-red-700 text-sm" (click)="deleteCategory(cat.id)">Eliminar</button>
+                    </li>
+                  }
+                  @if (categories.length === 0) {
+                    <li class="p-4 text-center text-sm text-gray-500">Agrega tu primera categoria. Ej: Arriendo, Insumos.</li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
+  styles: [`
+    .animate-fade-in-up { animation: fadeInUp 0.2s ease-out; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  `]
 })
 export class DashboardComponent implements OnInit {
   loading = true;
   upcomingAppointments: any[] = [];
+  activeFinanceType: 'Ingresos' | 'Egresos' = 'Ingresos';
+  categories: ExpenseCategory[] = [];
+  showTxModal = false;
+  showCatModal = false;
+  saving = false;
+  newCatName = '';
+  txForm: FormGroup;
 
   kpis: any[] = [
     { label: 'Citas Hoy', value: '0', iconPath: 'assets/Interfaz/Citas.png', iconBg: '#EFF6FF', trend: 'Hoy', trendColor: 'text-text-secondary' },
@@ -162,13 +277,25 @@ export class DashboardComponent implements OnInit {
   public chartOptions: Partial<ChartOptions> = {};
 
   constructor(
+    private fb: FormBuilder,
     private dashboardService: DashboardService,
+    private businessService: BusinessService,
+    private supabase: SupabaseService,
     public router: Router
-  ) {}
+  ) {
+    this.txForm = this.fb.group({
+      amount: ['', [Validators.required, Validators.min(1)]],
+      recorded_at: [new Date().toISOString().split('T')[0], Validators.required],
+      description: ['', Validators.required],
+      category_id: [''],
+      notes: ['']
+    });
+  }
 
   ngOnInit(): void {
     this.initChart();
     this.loadData();
+    void this.loadCategories();
   }
 
   private initChart(): void {
@@ -240,6 +367,127 @@ export class DashboardComponent implements OnInit {
       },
       error: () => this.loading = false
     });
+  }
+
+  openTransactionModal(type: 'Ingresos' | 'Egresos'): void {
+    this.activeFinanceType = type;
+    this.txForm.reset({ recorded_at: new Date().toISOString().split('T')[0] });
+
+    if (type === 'Egresos') {
+      this.txForm.get('category_id')?.setValidators(Validators.required);
+    } else {
+      this.txForm.get('category_id')?.clearValidators();
+    }
+
+    this.txForm.get('category_id')?.updateValueAndValidity();
+    this.showTxModal = true;
+  }
+
+  closeModals(): void {
+    this.showTxModal = false;
+    this.showCatModal = false;
+  }
+
+  async saveTransaction(): Promise<void> {
+    if (this.txForm.invalid) {
+      this.txForm.markAllAsTouched();
+      return;
+    }
+
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    this.saving = true;
+    try {
+      const table = this.activeFinanceType === 'Ingresos' ? 'income_records' : 'expense_records';
+      const payload: any = {
+        business_id: business.id,
+        description: this.txForm.value.description,
+        amount: Number(this.txForm.value.amount),
+        recorded_at: this.txForm.value.recorded_at,
+        notes: this.txForm.value.notes || null,
+      };
+
+      if (this.activeFinanceType === 'Egresos') {
+        payload.category_id = Number(this.txForm.value.category_id);
+      }
+
+      const { error } = await this.supabase.client.from(table).insert(payload);
+      if (error) throw new Error(error.message);
+
+      this.closeModals();
+      this.loadData();
+    } catch (error: any) {
+      alert(error?.message ?? 'Revisa los campos.');
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  async loadCategories(): Promise<void> {
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    const { data, error } = await this.supabase.client
+      .from('expense_categories')
+      .select('*')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .order('name');
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    this.categories = data ?? [];
+  }
+
+  openCategoryModal(): void {
+    this.showCatModal = true;
+  }
+
+  async saveCategory(): Promise<void> {
+    const business = this.businessService.currentBusiness();
+    if (!business || !this.newCatName.trim()) return;
+
+    this.saving = true;
+    const { error } = await this.supabase.client
+      .from('expense_categories')
+      .insert({
+        business_id: business.id,
+        name: this.newCatName.trim(),
+        is_active: true,
+      });
+
+    this.saving = false;
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    this.newCatName = '';
+    await this.loadCategories();
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    if (!confirm('Eliminar esta categoria? Esto no eliminara los gastos asignados previamente.')) return;
+
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    const { error } = await this.supabase.client
+      .from('expense_categories')
+      .delete()
+      .eq('id', id)
+      .eq('business_id', business.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await this.loadCategories();
   }
 }
 

@@ -111,7 +111,7 @@ export const routes: Routes = [
           import('./features/dashboard/pages/dashboard/dashboard.component').then(
             m => m.DashboardComponent
           ),
-        title: 'Dashboard — Skedia'
+        title: 'Finanzas — Skedia'
       },
       {
         path: 'agenda',
@@ -170,12 +170,12 @@ export const routes: Routes = [
         title: 'Servicios — Skedia'
       },
       {
-        path: 'finanzas',
+        path: 'suscripcion',
         loadComponent: () =>
-          import('./features/finance/pages/finance/finance.component').then(
-            m => m.FinanceComponent
+          import('./features/subscription/pages/subscription/subscription.component').then(
+            m => m.SubscriptionComponent
           ),
-        title: 'Finanzas — Skedia'
+        title: 'Suscripcion - Skedia'
       },
       {
         path: 'insumos',

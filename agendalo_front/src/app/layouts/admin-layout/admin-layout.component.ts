@@ -240,13 +240,13 @@ export class AdminLayoutComponent {
     }
 
     return [
-      { label: 'Dashboard', iconPath: 'assets/Interfaz/Dashboard.png', route: '/app/dashboard' },
+      { label: 'Finanzas', iconPath: 'assets/Interfaz/Dashboard.png', route: '/app/dashboard' },
       { label: 'Agenda', iconPath: 'assets/Interfaz/Agenda.png', route: '/app/agenda' },
       { label: 'Citas', iconPath: 'assets/Interfaz/Citas.png', route: '/app/citas' },
       { label: 'Clientes', iconPath: 'assets/Interfaz/Clientes.png', route: '/app/clientes' },
       { label: 'Servicios', iconPath: 'assets/Interfaz/Servicios.png', route: '/app/servicios' },
       { label: 'Insumos', iconPath: 'assets/Interfaz/Insumos.png', route: '/app/insumos' },
-      { label: 'Finanzas', iconPath: 'assets/Interfaz/Finanzas.png', route: '/app/finanzas' },
+      { label: 'Suscripcion', iconPath: 'assets/Interfaz/Finanzas.png', route: '/app/suscripcion' },
       { label: 'Configuración', iconPath: 'assets/Interfaz/Configuraci%C3%B3n.png', route: '/app/configuracion' },
     ];
   });
