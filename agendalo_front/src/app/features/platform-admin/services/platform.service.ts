@@ -117,6 +117,22 @@ export class PlatformService {
     });
   }
 
+  deleteUser(id: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.functions.invoke('platform-admin-users', {
+        body: {
+          action: 'delete-user',
+          user_id: id,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      return { success: true, data };
+    });
+  }
+
   private async count(table: string, column?: string, value?: unknown): Promise<number> {
     let query = this.supabase.client
       .from(table)

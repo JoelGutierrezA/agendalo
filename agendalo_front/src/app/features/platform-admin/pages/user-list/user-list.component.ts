@@ -1,10 +1,10 @@
-import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { PlatformService } from '../../services/platform.service';
+import { ToastService } from '../../../../core/services/toast.service';
 import { ApiResponse } from '../../../../models/auth.models';
-
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
+import { PlatformService } from '../../services/platform.service';
 
 @Component({
   selector: 'app-user-list',
@@ -15,11 +15,11 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
       <div class="page-header">
         <div>
           <div class="flex items-center gap-3">
-          <img src="assets/Interfaz/Clientes.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
-          <h1 class="page-title">Administración de Usuarios</h1>
+            <img src="assets/Interfaz/Clientes.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
+            <h1 class="page-title">Administracion de Usuarios</h1>
+          </div>
         </div>
-        </div>
-        <a routerLink="/admin-plataforma" class="btn-secondary">← Volver</a>
+        <a routerLink="/admin-plataforma" class="btn-secondary">Volver</a>
       </div>
 
       <div class="card p-0 overflow-hidden">
@@ -42,7 +42,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
                     <td class="p-4"><div class="skeleton-text w-48 h-4"></div></td>
                     <td class="p-4"><div class="skeleton w-16 h-6 rounded-lg"></div></td>
                     <td class="p-4"><div class="skeleton w-20 h-6 rounded-lg"></div></td>
-                    <td class="p-4 text-right"><div class="skeleton w-24 h-8 rounded-xl ml-auto"></div></td>
+                    <td class="p-4 text-right"><div class="skeleton w-36 h-8 rounded-xl ml-auto"></div></td>
                   </tr>
                 }
               } @else {
@@ -54,25 +54,43 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
                     </td>
                     <td class="p-4 text-text-secondary font-medium">{{ user.email }}</td>
                     <td class="p-4">
-                      <span class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight"
-                            [class]="user.role === 'admin_platform' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'">
-                        {{ user.role === 'admin_platform' ? 'Admin' : 'Dueño' }}
+                      <span
+                        class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight"
+                        [class]="user.role === 'admin_platform' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'"
+                      >
+                        {{ user.role === 'admin_platform' ? 'Admin' : 'Dueno' }}
                       </span>
                     </td>
                     <td class="p-4 text-xs font-semibold">
-                      <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
-                            [class]="user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+                      <span
+                        class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                        [class]="user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                      >
                         <span class="w-2 h-2 rounded-full" [class]="user.is_active ? 'bg-green-500' : 'bg-red-500'"></span>
                         {{ user.is_active ? 'Activo' : 'Inactivo' }}
                       </span>
                     </td>
                     <td class="p-4 text-right">
                       @if (user.role !== 'admin_platform') {
-                        <button (click)="toggleStatus(user)" 
-                                class="text-[11px] font-bold px-4 py-2 rounded-xl transition-all border uppercase"
-                                [class]="user.is_active ? 'text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300' : 'text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300'">
-                          {{ user.is_active ? 'Baja' : 'Alta' }}
-                        </button>
+                        <div class="flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            (click)="toggleStatus(user)"
+                            class="text-[11px] font-bold px-4 py-2 rounded-xl transition-all border uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                            [disabled]="deletingUserId === user.id"
+                            [class]="user.is_active ? 'text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300' : 'text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300'"
+                          >
+                            {{ user.is_active ? 'Baja' : 'Alta' }}
+                          </button>
+                          <button
+                            type="button"
+                            (click)="deleteUser(user)"
+                            class="text-[11px] font-bold px-4 py-2 rounded-xl transition-all border uppercase text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                            [disabled]="deletingUserId === user.id"
+                          >
+                            {{ deletingUserId === user.id ? 'Eliminando...' : 'Eliminar' }}
+                          </button>
+                        </div>
                       }
                     </td>
                   </tr>
@@ -82,16 +100,15 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
           </table>
           @if (users.length === 0 && !loading) {
             <app-empty-state
-              icon="👥"
+              icon="users"
               title="No hay usuarios registrados"
-              description="Aún no hay usuarios registrados en la plataforma."
+              description="Aun no hay usuarios registrados en la plataforma."
             ></app-empty-state>
           }
         </div>
 
-        <!-- Pagination -->
         <div class="p-4 border-t border-border flex justify-between items-center bg-gray-50/30">
-          <span class="text-xs font-medium text-text-secondary">Página {{ currentPage }} de {{ lastPage }}</span>
+          <span class="text-xs font-medium text-text-secondary">Pagina {{ currentPage }} de {{ lastPage }}</span>
           <div class="flex gap-2">
             <button (click)="loadPage(currentPage - 1)" [disabled]="currentPage === 1" class="btn-secondary btn-sm px-4">Anterior</button>
             <button (click)="loadPage(currentPage + 1)" [disabled]="currentPage === lastPage" class="btn-secondary btn-sm px-4">Siguiente</button>
@@ -99,15 +116,19 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
         </div>
       </div>
     </div>
-  `
+  `,
 })
 export class UserListComponent implements OnInit {
   users: any[] = [];
   loading = true;
   currentPage = 1;
   lastPage = 1;
+  deletingUserId: string | null = null;
 
-  constructor(private platformService: PlatformService) {}
+  constructor(
+    private platformService: PlatformService,
+    private toastService: ToastService
+  ) {}
 
   ngOnInit(): void {
     this.loadPage(1);
@@ -122,19 +143,51 @@ export class UserListComponent implements OnInit {
         this.lastPage = res.data.last_page;
         this.loading = false;
       },
-      error: () => this.loading = false
+      error: () => {
+        this.loading = false;
+      },
     });
   }
 
   toggleStatus(user: any): void {
     const action = user.is_active ? 'desactivar' : 'activar';
-    if (confirm(`¿Estás seguro de que deseas ${action} el acceso de ${user.name}?`)) {
-      this.platformService.toggleUserStatus(user.id).subscribe({
-        next: () => {
-          user.is_active = !user.is_active;
+    if (!confirm(`Estas seguro de que deseas ${action} el acceso de ${user.name}?`)) return;
+
+    this.platformService.toggleUserStatus(user.id).subscribe({
+      next: () => {
+        user.is_active = !user.is_active;
+        this.toastService.success(`Usuario ${user.is_active ? 'activado' : 'desactivado'}.`);
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo actualizar el usuario');
+      },
+    });
+  }
+
+  deleteUser(user: any): void {
+    const confirmed = confirm(
+      `Esta accion eliminara definitivamente la cuenta de ${user.name} (${user.email}) y sus datos asociados. Esta accion no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    this.deletingUserId = user.id;
+    this.platformService.deleteUser(user.id).subscribe({
+      next: () => {
+        this.users = this.users.filter(current => current.id !== user.id);
+        this.toastService.success('Usuario eliminado definitivamente.');
+
+        if (this.users.length === 0 && this.currentPage > 1) {
+          this.loadPage(this.currentPage - 1);
+          return;
         }
-      });
-    }
+
+        this.deletingUserId = null;
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo eliminar el usuario');
+        this.deletingUserId = null;
+      },
+    });
   }
 }
-
