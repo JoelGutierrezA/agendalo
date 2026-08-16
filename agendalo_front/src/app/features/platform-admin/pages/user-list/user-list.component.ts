@@ -42,7 +42,7 @@ import { PlatformService } from '../../services/platform.service';
                     <td class="p-4"><div class="skeleton-text w-48 h-4"></div></td>
                     <td class="p-4"><div class="skeleton w-16 h-6 rounded-lg"></div></td>
                     <td class="p-4"><div class="skeleton w-20 h-6 rounded-lg"></div></td>
-                    <td class="p-4 text-right"><div class="skeleton w-36 h-8 rounded-xl ml-auto"></div></td>
+                    <td class="p-4 text-right"><div class="skeleton w-24 h-10 rounded-xl ml-auto"></div></td>
                   </tr>
                 }
               } @else {
@@ -76,19 +76,42 @@ import { PlatformService } from '../../services/platform.service';
                           <button
                             type="button"
                             (click)="toggleStatus(user)"
-                            class="text-[11px] font-bold px-4 py-2 rounded-xl transition-all border uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
                             [disabled]="deletingUserId === user.id"
+                            [attr.aria-label]="user.is_active ? 'Dar de baja usuario' : 'Dar de alta usuario'"
+                            [title]="user.is_active ? 'Dar de baja' : 'Dar de alta'"
                             [class]="user.is_active ? 'text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300' : 'text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300'"
                           >
-                            {{ user.is_active ? 'Baja' : 'Alta' }}
+                            @if (user.is_active) {
+                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 2v10"></path>
+                                <path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>
+                              </svg>
+                            } @else {
+                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M20 6 9 17l-5-5"></path>
+                              </svg>
+                            }
                           </button>
                           <button
                             type="button"
                             (click)="deleteUser(user)"
-                            class="text-[11px] font-bold px-4 py-2 rounded-xl transition-all border uppercase text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
                             [disabled]="deletingUserId === user.id"
+                            aria-label="Eliminar usuario"
+                            title="Eliminar"
                           >
-                            {{ deletingUserId === user.id ? 'Eliminando...' : 'Eliminar' }}
+                            @if (deletingUserId === user.id) {
+                              <span class="h-4 w-4 rounded-full border-2 border-red-200 border-t-red-700 animate-spin" aria-hidden="true"></span>
+                            } @else {
+                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 6h18"></path>
+                                <path d="M8 6V4h8v2"></path>
+                                <path d="M19 6l-1 14H6L5 6"></path>
+                                <path d="M10 11v5"></path>
+                                <path d="M14 11v5"></path>
+                              </svg>
+                            }
                           </button>
                         </div>
                       }
