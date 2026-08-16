@@ -7,14 +7,21 @@ const corsHeaders = {
 };
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const adminKey = getKey('SUPABASE_SECRET_KEYS', [
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_SECRET_KEY',
+  'SUPABASE_SERVICE_KEY',
+]);
+const publishableKey = getKey('SUPABASE_PUBLISHABLE_KEYS', [
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_PUBLISHABLE_KEY',
+]);
 
-const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
+const serviceClient = createClient(supabaseUrl, adminKey, {
   auth: { persistSession: false },
 });
 
-const anonClient = createClient(supabaseUrl, anonKey, {
+const anonClient = createClient(supabaseUrl, publishableKey, {
   auth: { persistSession: false },
 });
 
@@ -78,20 +85,50 @@ async function requirePlatformAdmin(req: Request): Promise<{ userId: string }> {
   const token = authHeader.replace(/^Bearer\s+/i, '');
 
   if (!token) throw new HttpError('Sesion no disponible.', 401);
+  if (!supabaseUrl || !publishableKey) throw new HttpError('Configuracion publica de Supabase no disponible.', 500);
+  if (!adminKey) throw new HttpError('Configuracion admin de Supabase no disponible.', 500);
 
   const { data: userData, error: userError } = await anonClient.auth.getUser(token);
   if (userError || !userData.user) throw new HttpError('Sesion invalida.', 401);
 
-  const { data: profile, error: profileError } = await serviceClient
+  const userClient = createClient(supabaseUrl, publishableKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    auth: { persistSession: false },
+  });
+
+  const { data: profile, error: profileError } = await userClient
     .from('profiles')
     .select('role, is_active')
     .eq('id', userData.user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || !profile?.is_active) throw new HttpError('Perfil no disponible.', 403);
+  if (profileError) throw new HttpError(`No se pudo validar el perfil: ${profileError.message}`, 403);
+  if (!profile) throw new HttpError('Perfil no disponible para esta sesion.', 403);
+  if (!profile.is_active) throw new HttpError('Perfil inactivo.', 403);
   if (profile.role !== 'admin_platform') throw new HttpError('No tienes permisos para esta accion.', 403);
 
   return { userId: userData.user.id };
+}
+
+function getKey(jsonEnvName: string, fallbackNames: string[]): string {
+  for (const name of fallbackNames) {
+    const value = Deno.env.get(name);
+    if (value) return value;
+  }
+
+  const rawJson = Deno.env.get(jsonEnvName);
+  if (!rawJson) return '';
+
+  try {
+    const parsed = JSON.parse(rawJson) as Record<string, string>;
+    return parsed.default ?? Object.values(parsed)[0] ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function isUuid(value: string): boolean {
