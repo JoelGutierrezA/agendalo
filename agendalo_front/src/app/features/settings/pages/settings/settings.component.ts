@@ -340,9 +340,12 @@ export class SettingsComponent implements OnInit {
     }
 
     this.loadBusinessData();
-    this.loadOpeningHours();
-    this.loadSettings();
-    this.loadGoogleStatus();
+
+    if (!this.isPlatformAdmin()) {
+      this.loadOpeningHours();
+      this.loadSettings();
+      this.loadGoogleStatus();
+    }
 
     const googleResult = this.route.snapshot.queryParamMap.get('google');
     if (googleResult === 'connected') {
@@ -366,7 +369,7 @@ export class SettingsComponent implements OnInit {
   }
 
   private loadGoogleStatus(): void {
-    if (this.authService.currentUser()?.role === 'admin_platform') {
+    if (this.isPlatformAdmin()) {
       return;
     }
 
@@ -471,6 +474,10 @@ export class SettingsComponent implements OnInit {
   }
 
   private loadOpeningHours(): void {
+    if (this.isPlatformAdmin()) {
+      return;
+    }
+
     this.businessService.getOpeningHours().subscribe({
       next: (res) => {
         if (res.data && res.data.length > 0) {
@@ -573,6 +580,10 @@ export class SettingsComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  private isPlatformAdmin(): boolean {
+    return this.authService.currentUser()?.role === 'admin_platform';
   }
 }
 

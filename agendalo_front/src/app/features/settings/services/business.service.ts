@@ -21,6 +21,7 @@ export class BusinessService {
       const businessId = user?.business_id;
 
       if (!businessId) {
+        this.clearBusiness();
         throw new Error('El usuario aún no tiene un negocio configurado.');
       }
 
@@ -93,15 +94,7 @@ export class BusinessService {
       const mapped = this.mapBusiness({
         ...business,
         category: null,
-        settings: {
-          booking_advance_days: 30,
-          min_booking_notice_hours: 1,
-          allow_public_booking: true,
-          booking_confirmation_required: false,
-          send_client_calendar_invite: true,
-          time_zone: 'America/Santiago',
-          currency: 'CLP',
-        },
+        settings: this.defaultSettings(),
       });
 
       return this.wrap(mapped);
@@ -229,10 +222,20 @@ export class BusinessService {
         .from('business_settings')
         .select('*')
         .eq('business_id', business.id)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
-        throw new Error(error?.message ?? 'No se pudo cargar la configuración.');
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data) {
+        await this.createDefaultSettings(business.id);
+        const settings = this.defaultSettings();
+        const current = this.currentBusiness();
+        if (current) {
+          this.saveBusiness({ ...current, settings });
+        }
+        return this.wrap(settings);
       }
 
       return this.wrap(this.mapSettings(data));
@@ -245,8 +248,10 @@ export class BusinessService {
 
       const { data, error } = await this.supabase.client
         .from('business_settings')
-        .update(payload)
-        .eq('business_id', business.id)
+        .upsert({
+          business_id: business.id,
+          ...payload,
+        }, { onConflict: 'business_id' })
         .select('*')
         .single();
 
@@ -279,16 +284,10 @@ export class BusinessService {
   private async createDefaultSettings(businessId: number): Promise<void> {
     const { error } = await this.supabase.client
       .from('business_settings')
-      .insert({
+      .upsert({
         business_id: businessId,
-        booking_advance_days: 30,
-        min_booking_notice_hours: 1,
-        allow_public_booking: true,
-        booking_confirmation_required: false,
-        send_client_calendar_invite: true,
-        time_zone: 'America/Santiago',
-        currency: 'CLP',
-      });
+        ...this.defaultSettings(),
+      }, { onConflict: 'business_id' });
 
     if (error) throw new Error(error.message);
   }
@@ -334,6 +333,18 @@ export class BusinessService {
       throw new Error('No hay un negocio seleccionado.');
     }
     return business;
+  }
+
+  private defaultSettings(): BusinessSettings {
+    return {
+      booking_advance_days: 30,
+      min_booking_notice_hours: 1,
+      allow_public_booking: true,
+      booking_confirmation_required: false,
+      send_client_calendar_invite: true,
+      time_zone: 'America/Santiago',
+      currency: 'CLP',
+    };
   }
 
   private mapBusiness(row: any): Business {
