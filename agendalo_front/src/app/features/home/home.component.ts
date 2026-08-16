@@ -30,8 +30,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
 
       <main class="flex-1">
         <section
-          class="relative min-h-[440px] sm:min-h-[500px] lg:min-h-[560px] flex items-center bg-slate-50 bg-no-repeat overflow-hidden"
-          style="background-image: linear-gradient(90deg, rgba(248, 250, 252, 0.98) 0%, rgba(248, 250, 252, 0.88) 32%, rgba(248, 250, 252, 0.42) 52%, rgba(248, 250, 252, 0.06) 100%), url('assets/Hero.png'), radial-gradient(circle at 78% 42%, rgba(221, 232, 255, 0.9) 0%, rgba(237, 244, 255, 0.72) 34%, rgba(248, 250, 252, 0) 72%), linear-gradient(180deg, #f8fafc 0%, #eef5ff 52%, #f8fafc 100%); background-size: 100% 100%, auto 116%, 84% 100%, 100% 100%; background-position: center, 79% center, right center, center; background-repeat: no-repeat;"
+          class="home-hero relative min-h-[360px] sm:min-h-[500px] lg:min-h-[560px] flex items-center bg-slate-50 bg-no-repeat overflow-hidden"
         >
           <div class="max-w-[1440px] mx-auto w-full px-6 sm:px-10 lg:px-16 2xl:px-20 py-16 sm:py-20">
             <div class="max-w-xl space-y-7">
@@ -141,6 +140,26 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
       <app-public-footer />
     </div>
   `,
+  styles: [`
+    .home-hero {
+      background-image:
+        linear-gradient(90deg, rgba(248, 250, 252, 0.98) 0%, rgba(248, 250, 252, 0.88) 32%, rgba(248, 250, 252, 0.42) 52%, rgba(248, 250, 252, 0.06) 100%),
+        url('/assets/Hero.png'),
+        radial-gradient(circle at 78% 42%, rgba(221, 232, 255, 0.9) 0%, rgba(237, 244, 255, 0.72) 34%, rgba(248, 250, 252, 0) 72%),
+        linear-gradient(180deg, #f8fafc 0%, #eef5ff 52%, #f8fafc 100%);
+      background-size: 100% 100%, auto 116%, 84% 100%, 100% 100%;
+      background-position: center, 79% center, right center, center;
+      background-repeat: no-repeat;
+    }
+
+    @media (max-width: 639px) {
+      .home-hero {
+        background-image: linear-gradient(180deg, #f8fafc 0%, #eef5ff 100%);
+        background-size: 100% 100%;
+        background-position: center;
+      }
+    }
+  `],
 })
 export class HomeComponent {
   plans = [
