@@ -52,13 +52,14 @@ Deno.serve(async (req) => {
       throw new HttpError('No puedes eliminar tu propia cuenta desde esta accion.', 400);
     }
 
-    const { data: targetUser, error: targetError } = await serviceClient
+    const adminUserClient = createUserClient(adminContext.token);
+    const { data: targetUser, error: targetError } = await adminUserClient
       .from('profiles')
       .select('id, name, email, role')
       .eq('id', targetUserId)
       .maybeSingle();
 
-    if (targetError) throw new Error(targetError.message);
+    if (targetError) throw new HttpError(`No se pudo leer el usuario: ${targetError.message}`, 403);
     if (!targetUser) throw new HttpError('Usuario no encontrado.', 404);
     if (targetUser.role === 'admin_platform') {
       throw new HttpError('No se puede eliminar un administrador de plataforma.', 403);
@@ -80,7 +81,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function requirePlatformAdmin(req: Request): Promise<{ userId: string }> {
+async function requirePlatformAdmin(req: Request): Promise<{ userId: string; token: string }> {
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
 
@@ -91,14 +92,7 @@ async function requirePlatformAdmin(req: Request): Promise<{ userId: string }> {
   const { data: userData, error: userError } = await anonClient.auth.getUser(token);
   if (userError || !userData.user) throw new HttpError('Sesion invalida.', 401);
 
-  const userClient = createClient(supabaseUrl, publishableKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-    auth: { persistSession: false },
-  });
+  const userClient = createUserClient(token);
 
   const { data: profile, error: profileError } = await userClient
     .from('profiles')
@@ -111,7 +105,18 @@ async function requirePlatformAdmin(req: Request): Promise<{ userId: string }> {
   if (!profile.is_active) throw new HttpError('Perfil inactivo.', 403);
   if (profile.role !== 'admin_platform') throw new HttpError('No tienes permisos para esta accion.', 403);
 
-  return { userId: userData.user.id };
+  return { userId: userData.user.id, token };
+}
+
+function createUserClient(token: string) {
+  return createClient(supabaseUrl, publishableKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    auth: { persistSession: false },
+  });
 }
 
 function getKey(jsonEnvName: string, fallbackNames: string[]): string {
