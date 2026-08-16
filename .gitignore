@@ -1,6 +1,7 @@
 agendalo_front/node_modules/
 agendalo_front/dist/
 agendalo_front/.angular/
+supabase/.temp/
 
 .DS_Store
 Thumbs.db

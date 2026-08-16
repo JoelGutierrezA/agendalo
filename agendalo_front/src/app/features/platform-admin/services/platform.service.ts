@@ -119,18 +119,46 @@ export class PlatformService {
 
   deleteUser(id: string): Observable<any> {
     return defer(async () => {
+      const { data: sessionData, error: sessionError } = await this.supabase.client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        throw new Error('Sesion no disponible. Vuelve a iniciar sesion.');
+      }
+
       const { data, error } = await this.supabase.client.functions.invoke('platform-admin-users', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: {
           action: 'delete-user',
           user_id: id,
         },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await this.getFunctionErrorMessage(error));
       if (data?.error) throw new Error(data.error);
 
       return { success: true, data };
     });
+  }
+
+  private async getFunctionErrorMessage(error: unknown): Promise<string> {
+    const fallback = (error as { message?: string })?.message ?? 'No se pudo ejecutar la accion.';
+    const response = (error as { context?: Response })?.context;
+
+    if (!response) return fallback;
+
+    try {
+      const payload = await response.clone().json();
+      return payload?.error ?? fallback;
+    } catch {
+      try {
+        return await response.clone().text() || fallback;
+      } catch {
+        return fallback;
+      }
+    }
   }
 
   private async count(table: string, column?: string, value?: unknown): Promise<number> {
