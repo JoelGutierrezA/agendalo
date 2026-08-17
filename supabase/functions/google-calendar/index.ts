@@ -19,8 +19,8 @@ const corsHeaders = {
 };
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || getSupabaseKey('SUPABASE_SECRET_KEYS');
+const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || getSupabaseKey('SUPABASE_PUBLISHABLE_KEYS');
 const googleClientId = Deno.env.get('GOOGLE_CLIENT_ID') ?? '';
 const googleClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? '';
 const googleRedirectUri = Deno.env.get('GOOGLE_REDIRECT_URI') ?? '';
@@ -28,11 +28,41 @@ const frontendUrl = (Deno.env.get('FRONTEND_URL') ?? 'http://localhost:4200').re
 
 const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false },
+  global: {
+    fetch: supabaseFetch(serviceRoleKey),
+  },
 });
 
 const anonClient = createClient(supabaseUrl, anonKey, {
   auth: { persistSession: false },
 });
+
+function getSupabaseKey(envName: string): string {
+  const raw = Deno.env.get(envName);
+  if (!raw) return '';
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'string') return parsed;
+    if (typeof parsed.default === 'string') return parsed.default;
+
+    const firstKey = Object.values(parsed).find((value) => typeof value === 'string');
+    return typeof firstKey === 'string' ? firstKey : '';
+  } catch {
+    return raw;
+  }
+}
+
+function supabaseFetch(supabaseKey: string) {
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    if (supabaseKey.startsWith('sb_secret_') && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
+      headers.delete('Authorization');
+    }
+
+    return fetch(input, { ...init, headers });
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

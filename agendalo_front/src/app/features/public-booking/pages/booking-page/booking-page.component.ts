@@ -411,10 +411,17 @@ export class BookingPageComponent implements OnInit {
 
     const appointmentId = Number(data);
     await this.googleCalendarService.syncPublicAppointment(appointmentId).catch(() => undefined);
+    await this.notifyBusiness(appointmentId);
 
     this.router.navigate(['/negocio', this.slug, 'confirmacion'], {
       queryParams: { appointment: appointmentId }
     });
+  }
+
+  private async notifyBusiness(appointmentId: number): Promise<void> {
+    await this.supabase.client.functions.invoke('notify-appointment', {
+      body: { appointment_id: appointmentId },
+    }).catch(() => undefined);
   }
 
   formatDate(dateStr: string): string {
