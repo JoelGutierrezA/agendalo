@@ -122,7 +122,7 @@ export class DashboardService {
         client_name,
         scheduled_at,
         status,
-        service:services(name)
+        service:services(name, price)
       `)
       .eq('business_id', businessId)
       .gte('scheduled_at', from.toISOString())
@@ -136,6 +136,13 @@ export class DashboardService {
       id: appointment.id,
       client_name: appointment.client_name,
       service_name: appointment.service?.name ?? 'Cita personalizada',
+      service_price: Number(appointment.service?.price ?? 0),
+      scheduled_at: appointment.scheduled_at,
+      date: new Date(appointment.scheduled_at).toLocaleDateString('es-CL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }),
       status: appointment.status,
       time: new Date(appointment.scheduled_at).toLocaleTimeString('es-CL', {
         hour: '2-digit',

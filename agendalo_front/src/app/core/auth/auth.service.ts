@@ -105,10 +105,15 @@ export class AuthService {
   }
 
   logout(): Observable<void> {
-    return from(this.supabase.client.auth.signOut()).pipe(
-      tap(() => this.clearSession()),
-      map(() => undefined)
-    );
+    return defer(async () => {
+      try {
+        await this.supabase.client.auth.signOut();
+      } catch {
+        // Local logout should still complete even if the remote session revoke fails.
+      }
+
+      this.clearSession();
+    });
   }
 
   endSession(): void {

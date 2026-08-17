@@ -150,7 +150,7 @@ export class BusinessService {
         .upload(filePath, file, {
           cacheControl: '3600',
           contentType: file.type,
-          upsert: true,
+          upsert: false,
         });
 
       if (error) {

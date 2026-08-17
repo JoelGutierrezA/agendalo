@@ -2,10 +2,11 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
-import { NgApexchartsModule, ApexAxisChartSeries, ApexChart, ApexXAxis, ApexDataLabels, ApexTooltip, ApexStroke, ApexYAxis, ApexFill, ApexGrid } from "ng-apexcharts";
 import { DashboardService, DashboardSummary } from '../../../../core/services/dashboard.service';
+import { ToastService } from '../../../../core/services/toast.service';
 import { BusinessService } from '../../../settings/services/business.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
+import { AppointmentFilters, AppointmentRow, AppointmentsService } from '../../../appointments/services/appointments.service';
 
 interface ExpenseCategory {
   id: number;
@@ -13,22 +14,17 @@ interface ExpenseCategory {
   is_active: boolean;
 }
 
-export type ChartOptions = {
-  series: ApexAxisChartSeries;
-  chart: ApexChart;
-  xaxis: ApexXAxis;
-  stroke: ApexStroke;
-  dataLabels: ApexDataLabels;
-  tooltip: ApexTooltip;
-  fill: ApexFill;
-  yaxis: ApexYAxis;
-  grid: ApexGrid;
-};
+interface ServiceOption {
+  id: number;
+  name: string;
+  duration_minutes: number;
+  price: number;
+}
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterModule, NgApexchartsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterModule],
   template: `
     <div class="space-y-6 fade-in">
       <!-- Page Header -->
@@ -53,30 +49,23 @@ export type ChartOptions = {
         <div class="min-w-0">
           <div class="flex items-center gap-3">
             <img src="assets/Interfaz/Dashboard.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
-            <h1 class="page-title">Finanzas</h1>
+            <h1 class="page-title">Dashboard</h1>
           </div>
-        </div>
-        <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <button type="button" class="btn-secondary min-h-11 justify-center px-3 text-xs leading-tight sm:text-sm" (click)="openTransactionModal('Ingresos')">
-            + Registrar ingreso
-          </button>
-          <button type="button" class="btn-primary min-h-11 justify-center px-3 text-xs leading-tight sm:text-sm" (click)="openTransactionModal('Egresos')">
-            + Registrar egreso
-          </button>
         </div>
       </div>
 
-      <!-- KPI Cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        @for (kpi of kpis; track kpi.label) {
-          <div class="card p-4 sm:p-5 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(260px,360px)_1fr] gap-6">
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-1">
+          @for (kpi of kpis; track kpi.label) {
+          <div class="card p-3 sm:p-5 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
             <div class="flex items-start justify-between">
               <div>
                 <p class="text-text-secondary text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1">{{ kpi.label }}</p>
                 @if (loading) {
                   <div class="skeleton-text w-16 sm:w-24 h-7 sm:h-8 mt-1"></div>
                 } @else {
-                  <p class="text-xl sm:text-2xl font-bold text-text-primary">{{ kpi.value }}</p>
+                  <p class="text-lg sm:text-2xl font-bold text-text-primary">{{ kpi.value }}</p>
                 }
               </div>
               <div class="hidden sm:flex flex-shrink-0 w-14 h-14 rounded-xl items-center justify-center overflow-hidden transition-transform group-hover:scale-110" [style.background]="kpi.iconBg">
@@ -88,96 +77,249 @@ export type ChartOptions = {
                <span class="text-xs font-medium" [class]="kpi.trendColor">{{ kpi.trend }}</span>
             </div>
           </div>
-        }
-      </div>
-
-      <!-- Charts Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Gráfico Principal -->
-        <div class="card lg:col-span-2 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="font-bold text-lg text-text-primary">Evolución Semanal</h3>
-            <div class="flex gap-4">
-              <span class="flex items-center gap-1.5 text-xs text-text-secondary">
-                <span class="w-2 h-2 rounded-full bg-primary"></span> Citas
-              </span>
-              <span class="flex items-center gap-1.5 text-xs text-text-secondary">
-                <span class="w-2 h-2 rounded-full bg-green-500"></span> Ingresos
-              </span>
-            </div>
-          </div>
-          
-          @if (loading) {
-            <div class="h-64 flex items-center justify-center bg-background rounded-lg">
-              <span class="text-text-secondary text-sm">Cargando gráfico...</span>
-            </div>
-          } @else {
-            <div id="chart" class="h-64">
-              <apx-chart
-                [series]="chartOptions.series!"
-                [chart]="chartOptions.chart!"
-                [xaxis]="chartOptions.xaxis!"
-                [stroke]="chartOptions.stroke!"
-                [dataLabels]="chartOptions.dataLabels!"
-                [tooltip]="chartOptions.tooltip!"
-                [fill]="chartOptions.fill!"
-                [yaxis]="chartOptions.yaxis!"
-                [grid]="chartOptions.grid!"
-              ></apx-chart>
-            </div>
           }
         </div>
 
         <!-- Próximas Citas -->
-        <div class="card p-6">
+        <div class="space-y-4 min-w-0">
+        <div class="card p-4">
+          <button
+            type="button"
+            class="xl:hidden w-full flex items-center justify-between text-left"
+            (click)="toggleAppointmentFilters()"
+            [attr.aria-expanded]="appointmentFiltersExpanded"
+          >
+            <span class="font-semibold text-text-primary">Filtros</span>
+            <span class="text-sm text-primary font-semibold">{{ appointmentFiltersExpanded ? 'Ocultar' : 'Mostrar' }}</span>
+          </button>
+
+          <form
+            class="grid-cols-1 gap-3 xl:grid xl:grid-cols-[minmax(220px,1fr)_160px_160px_220px_auto] xl:items-end"
+            [ngClass]="appointmentFiltersExpanded ? 'grid mt-4 xl:mt-0' : 'hidden xl:grid'"
+            (ngSubmit)="applyAppointmentFilters()"
+          >
+            <div>
+              <label class="text-xs text-text-secondary font-medium mb-1 block">Buscar</label>
+              <input
+                type="text"
+                name="dashboardAppointmentSearch"
+                [(ngModel)]="appointmentFilters.search"
+                class="form-input w-full"
+                placeholder="Nombre, email o teléfono..."
+              />
+            </div>
+            <div>
+              <label class="text-xs text-text-secondary font-medium mb-1 block">Estado</label>
+              <select
+                name="dashboardAppointmentStatus"
+                [(ngModel)]="appointmentFilters.status"
+                (change)="loadAppointments()"
+                class="form-input w-full"
+              >
+                <option value="">Todos los estados</option>
+                <option value="pending">Pendiente</option>
+                <option value="confirmed">Confirmada</option>
+                <option value="completed">Completada</option>
+                <option value="cancelled">Cancelada</option>
+                <option value="no_show">No asistió</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-text-secondary font-medium mb-1 block">Fecha</label>
+              <input
+                type="date"
+                name="dashboardAppointmentDate"
+                [(ngModel)]="appointmentFilters.date"
+                (change)="loadAppointments()"
+                class="form-input w-full"
+              />
+            </div>
+            <div>
+              <label class="text-xs text-text-secondary font-medium mb-1 block">Ordenar por</label>
+              <select
+                name="dashboardAppointmentSort"
+                [(ngModel)]="appointmentFilters.sort_by"
+                (change)="loadAppointments()"
+                class="form-input w-full"
+              >
+                <option value="scheduled_at">Fecha de la cita</option>
+                <option value="created_at">Fecha de creación</option>
+              </select>
+            </div>
+            <button type="submit" class="btn-secondary h-[42px] justify-center px-6">Filtrar</button>
+          </form>
+        </div>
+
+        <div class="card p-6 min-h-full">
           <div class="flex items-center justify-between mb-6">
-            <h3 class="font-bold text-lg text-text-primary">Próximas Citas</h3>
+            <h3 class="font-bold text-lg text-text-primary">Citas</h3>
             <a routerLink="/app/agenda" class="text-xs text-primary font-medium hover:underline">Ver todas</a>
           </div>
 
-          @if (loading) {
-            <div class="space-y-4">
+          @if (appointmentsLoading) {
+            <div class="space-y-3">
               @for (i of [1,2,3,4]; track i) {
-                <div class="flex items-center gap-3">
-                  <div class="skeleton w-10 h-10 rounded-lg"></div>
-                  <div class="flex-1 space-y-2">
-                    <div class="skeleton w-3/4 h-3"></div>
-                    <div class="skeleton w-1/2 h-2"></div>
-                  </div>
+                <div class="grid grid-cols-7 gap-3">
+                  <div class="skeleton h-4 rounded col-span-1"></div>
+                  <div class="skeleton h-4 rounded col-span-1"></div>
+                  <div class="skeleton h-4 rounded col-span-1"></div>
+                  <div class="skeleton h-4 rounded col-span-1"></div>
+                  <div class="skeleton h-4 rounded col-span-1"></div>
+                  <div class="skeleton h-4 rounded col-span-1"></div>
+                  <div class="skeleton h-4 rounded col-span-1"></div>
                 </div>
               }
             </div>
           } @else if (upcomingAppointments.length === 0) {
             <div class="py-8 text-center bg-background/50 rounded-lg border border-border border-dashed">
                <img src="assets/Interfaz/Citas.png" alt="" class="w-10 h-10 rounded-lg object-cover mx-auto mb-2 opacity-70" aria-hidden="true">
-               <p class="text-text-secondary text-sm">No hay citas próximas</p>
+               <p class="text-text-secondary text-sm">No hay citas</p>
             </div>
           } @else {
-            <div class="space-y-4">
-              @for (apt of upcomingAppointments; track apt.id) {
-                <div class="flex items-center justify-between group">
-                  <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-gray-50 border border-border flex flex-col items-center justify-center text-[10px] font-bold text-text-secondary group-hover:bg-primary/5 group-hover:text-primary transition-colors">
-                      <span>{{ apt.time }}</span>
-                    </div>
-                    <div>
-                      <p class="text-sm font-semibold text-text-primary truncate max-w-[120px]">{{ apt.client_name }}</p>
-                      <p class="text-[11px] text-text-secondary">{{ apt.service_name }}</p>
-                    </div>
-                  </div>
-                  <span class="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
-                    [ngClass]="{
-                      'bg-blue-50 text-blue-700': apt.status === 'confirmed',
-                      'bg-yellow-50 text-yellow-700': apt.status === 'pending'
-                    }">
-                    {{ apt.status === 'confirmed' ? 'Conf' : 'Pend' }}
-                  </span>
-                </div>
-              }
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[760px] text-left text-sm">
+                <thead class="border-b border-border bg-gray-50/70 text-xs font-bold uppercase tracking-wider text-text-secondary">
+                  <tr>
+                    <th class="px-4 py-3 rounded-tl-xl">Fecha</th>
+                    <th class="px-4 py-3">Hora</th>
+                    <th class="px-4 py-3">Cliente</th>
+                    <th class="px-4 py-3">Servicio</th>
+                    <th class="px-4 py-3 text-right">Valor</th>
+                    <th class="px-4 py-3 text-center">Estado</th>
+                    <th class="px-4 py-3 text-right rounded-tr-xl">Acción</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  @for (apt of upcomingAppointments; track apt.id) {
+                    <tr class="transition-colors hover:bg-gray-50/60">
+                      <td class="px-4 py-3 whitespace-nowrap font-medium text-text-primary">{{ apt.date }}</td>
+                      <td class="px-4 py-3 whitespace-nowrap text-text-secondary">{{ apt.time }}</td>
+                      <td class="px-4 py-3">
+                        <span class="block max-w-[150px] truncate font-medium text-text-primary">{{ apt.client_name }}</span>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class="block max-w-[170px] truncate text-text-primary">{{ apt.service_name }}</span>
+                      </td>
+                      <td class="px-4 py-3 text-right whitespace-nowrap text-text-primary">
+                        {{ formatPrice(apt.service_price) }}
+                      </td>
+                      <td class="px-4 py-3 text-center">
+                        <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
+                          [ngClass]="{
+                            'bg-blue-100 text-blue-700': apt.status === 'confirmed',
+                            'bg-yellow-100 text-yellow-700': apt.status === 'pending',
+                            'bg-green-100 text-green-700': apt.status === 'completed',
+                            'bg-red-100 text-red-700': apt.status === 'cancelled',
+                            'bg-gray-100 text-gray-700': apt.status === 'no_show'
+                          }">
+                          {{ getStatusLabel(apt.status) }}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          (click)="openAppointmentModal(apt.id)"
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-primary-light hover:text-primary"
+                          title="Editar"
+                          aria-label="Editar cita"
+                        >
+                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           }
         </div>
       </div>
+      </div>
+
+      @if (showAppointmentModal) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in-up">
+            <div class="px-6 py-4 border-b border-border flex justify-between items-center bg-gray-50/50">
+              <h3 class="text-lg font-bold text-text-primary">Editar cita</h3>
+              <button type="button" (click)="closeAppointmentModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-2 leading-none">&times;</button>
+            </div>
+
+            @if (appointmentModalLoading) {
+              <div class="p-8 text-center text-text-secondary animate-pulse">Cargando cita...</div>
+            } @else {
+              <form [formGroup]="appointmentForm" (ngSubmit)="saveAppointment()" class="p-6 space-y-4">
+                @if (appointmentErrorMessage) {
+                  <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {{ appointmentErrorMessage }}
+                  </div>
+                }
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label class="form-label">Cliente *</label>
+                    <input type="text" formControlName="client_name" class="form-input" />
+                  </div>
+                  <div>
+                    <label class="form-label">Teléfono</label>
+                    <input type="tel" formControlName="client_phone" class="form-input" />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="form-label">Email</label>
+                  <input type="email" formControlName="client_email" class="form-input" />
+                </div>
+
+                <div>
+                  <label class="form-label">Servicio *</label>
+                  <select formControlName="service_id" class="form-input">
+                    <option value="">Seleccione...</option>
+                    @for (service of appointmentServices; track service.id) {
+                      <option [value]="service.id">{{ service.name }} ({{ service.duration_minutes }} min - {{ service.price | number:'1.0-0' }} CLP)</option>
+                    }
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label class="form-label">Fecha *</label>
+                    <input type="date" formControlName="date" class="form-input" />
+                  </div>
+                  <div>
+                    <label class="form-label">Hora *</label>
+                    <input type="time" formControlName="time" class="form-input" />
+                  </div>
+                  <div>
+                    <label class="form-label">Estado *</label>
+                    <select formControlName="status" class="form-input">
+                      <option value="pending">Pendiente</option>
+                      <option value="confirmed">Confirmada</option>
+                      <option value="completed">Completada</option>
+                      <option value="no_show">No asistió</option>
+                      <option value="cancelled">Cancelada</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="form-label">Notas</label>
+                  <textarea formControlName="notes" class="form-input" rows="3"></textarea>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-border">
+                  <button type="button" class="btn-secondary" (click)="closeAppointmentModal()">Cancelar</button>
+                  <button type="submit" class="btn-primary" [disabled]="appointmentSaving">
+                    {{ appointmentSaving ? 'Guardando...' : 'Guardar cambios' }}
+                  </button>
+                </div>
+              </form>
+            }
+          </div>
+        </div>
+      }
 
       @if (showTxModal) {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
@@ -314,16 +456,25 @@ export type ChartOptions = {
 })
 export class DashboardComponent implements OnInit {
   loading = true;
+  appointmentsLoading = true;
+  appointmentFiltersExpanded = false;
   upcomingAppointments: any[] = [];
   activeFinanceType: 'Ingresos' | 'Egresos' = 'Ingresos';
   categories: ExpenseCategory[] = [];
   showTxModal = false;
   showCatModal = false;
   showQrModal = false;
+  showAppointmentModal = false;
   saving = false;
+  appointmentSaving = false;
+  appointmentModalLoading = false;
   newCatName = '';
   copyLinkLabel = 'Copiar enlace';
+  selectedAppointmentId: number | null = null;
+  appointmentErrorMessage = '';
   txForm: FormGroup;
+  appointmentForm: FormGroup;
+  appointmentServices: ServiceOption[] = [];
 
   kpis: any[] = [
     { label: 'Citas Hoy', value: '0', iconPath: 'assets/Interfaz/Citas.png', iconBg: '#EFF6FF', trend: 'Hoy', trendColor: 'text-text-secondary' },
@@ -332,11 +483,19 @@ export class DashboardComponent implements OnInit {
     { label: 'Balance', value: '$0', iconPath: 'assets/Interfaz/Dashboard.png', iconBg: '#F8FAFC', trend: 'Mensual', trendColor: 'text-text-secondary' },
   ];
 
-  public chartOptions: Partial<ChartOptions> = {};
+  appointmentFilters: AppointmentFilters = {
+    search: '',
+    status: '',
+    date: '',
+    sort_by: 'scheduled_at',
+    sort_dir: 'desc',
+  };
 
   constructor(
     private fb: FormBuilder,
     private dashboardService: DashboardService,
+    private appointmentsService: AppointmentsService,
+    private toastService: ToastService,
     private businessService: BusinessService,
     private supabase: SupabaseService,
     public router: Router
@@ -348,11 +507,23 @@ export class DashboardComponent implements OnInit {
       category_id: [''],
       notes: ['']
     });
+
+    this.appointmentForm = this.fb.group({
+      client_name: ['', Validators.required],
+      client_email: [''],
+      client_phone: [''],
+      service_id: ['', Validators.required],
+      date: ['', Validators.required],
+      time: ['', Validators.required],
+      status: ['pending', Validators.required],
+      notes: [''],
+    });
   }
 
   ngOnInit(): void {
-    this.initChart();
     this.loadData();
+    void this.loadAppointments();
+    void this.loadAppointmentServices();
     void this.loadCategories();
   }
 
@@ -399,6 +570,180 @@ export class DashboardComponent implements OnInit {
     return `${window.location.origin}/negocio/${slug}`;
   }
 
+  getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      pending: 'Pendiente',
+      confirmed: 'Confirmada',
+      completed: 'Completada',
+      cancelled: 'Cancelada',
+      no_show: 'No asistió',
+    };
+
+    return labels[status] ?? status;
+  }
+
+  formatPrice(value: unknown): string {
+    const amount = Number(value);
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+
+    return `$${new Intl.NumberFormat('es-CL', {
+      maximumFractionDigits: 0,
+    }).format(safeAmount)}`;
+  }
+
+  applyAppointmentFilters(): void {
+    this.appointmentFiltersExpanded = false;
+    void this.loadAppointments();
+  }
+
+  toggleAppointmentFilters(): void {
+    this.appointmentFiltersExpanded = !this.appointmentFiltersExpanded;
+  }
+
+  async loadAppointments(): Promise<void> {
+    this.appointmentsLoading = true;
+
+    try {
+      const appointments = await this.appointmentsService.list(this.appointmentFilters);
+      this.upcomingAppointments = appointments.map(appointment => this.mapAppointment(appointment));
+    } catch (error: any) {
+      this.toastService.error(error?.message ?? 'No se pudieron cargar las citas.');
+    } finally {
+      this.appointmentsLoading = false;
+    }
+  }
+
+  private mapAppointment(appointment: AppointmentRow): any {
+    const servicePrice = Number(appointment.service?.price ?? 0);
+
+    return {
+      id: appointment.id,
+      client_name: appointment.client_name,
+      service_name: appointment.service?.name ?? 'Cita personalizada',
+      service_price: Number.isFinite(servicePrice) ? servicePrice : 0,
+      status: appointment.status,
+      date: this.formatDate(appointment.scheduled_at),
+      time: this.formatTime(appointment.scheduled_at),
+    };
+  }
+
+  private formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('es-CL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'America/Santiago',
+    });
+  }
+
+  private formatTime(dateString: string): string {
+    return new Date(dateString).toLocaleTimeString('es-CL', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Santiago',
+    });
+  }
+
+  async openAppointmentModal(appointmentId: number): Promise<void> {
+    this.showAppointmentModal = true;
+    this.appointmentModalLoading = true;
+    this.appointmentErrorMessage = '';
+    this.selectedAppointmentId = appointmentId;
+    this.appointmentForm.reset({ status: 'pending' });
+
+    try {
+      if (this.appointmentServices.length === 0) {
+        await this.loadAppointmentServices();
+      }
+
+      const appointment = await this.appointmentsService.find(appointmentId);
+      const date = new Date(appointment.scheduled_at);
+
+      this.appointmentForm.patchValue({
+        client_name: appointment.client_name,
+        client_email: appointment.client_email ?? '',
+        client_phone: appointment.client_phone ?? '',
+        service_id: appointment.service_id,
+        date: date.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }),
+        time: date.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'America/Santiago',
+        }),
+        status: appointment.status,
+        notes: appointment.notes ?? '',
+      });
+    } catch (error: any) {
+      this.appointmentErrorMessage = error?.message ?? 'No se pudo cargar la cita.';
+    } finally {
+      this.appointmentModalLoading = false;
+    }
+  }
+
+  closeAppointmentModal(): void {
+    this.showAppointmentModal = false;
+    this.appointmentModalLoading = false;
+    this.appointmentSaving = false;
+    this.selectedAppointmentId = null;
+    this.appointmentErrorMessage = '';
+  }
+
+  async saveAppointment(): Promise<void> {
+    if (this.appointmentForm.invalid || !this.selectedAppointmentId) {
+      this.appointmentForm.markAllAsTouched();
+      return;
+    }
+
+    this.appointmentSaving = true;
+    this.appointmentErrorMessage = '';
+
+    try {
+      const value = this.appointmentForm.value;
+      await this.appointmentsService.update(this.selectedAppointmentId, {
+        client_name: value.client_name,
+        client_email: value.client_email || null,
+        client_phone: value.client_phone || null,
+        service_id: Number(value.service_id),
+        scheduled_at: new Date(`${value.date}T${value.time}:00`).toISOString(),
+        status: value.status,
+        notes: value.notes || null,
+      });
+
+      this.toastService.success('Cita actualizada');
+      this.closeAppointmentModal();
+      void this.loadAppointments();
+      this.loadData();
+    } catch (error: any) {
+      this.appointmentErrorMessage = error?.message ?? 'No se pudo actualizar la cita.';
+    } finally {
+      this.appointmentSaving = false;
+    }
+  }
+
+  private async loadAppointmentServices(): Promise<void> {
+    const business = this.businessService.currentBusiness();
+    if (!business) return;
+
+    const { data, error } = await this.supabase.client
+      .from('services')
+      .select('id, name, duration_minutes, price')
+      .eq('business_id', business.id)
+      .order('name');
+
+    if (error) {
+      this.toastService.error(error.message);
+      return;
+    }
+
+    this.appointmentServices = (data ?? []).map((service: any) => ({
+      id: service.id,
+      name: service.name,
+      duration_minutes: Number(service.duration_minutes),
+      price: Number(service.price ?? 0),
+    }));
+  }
+
   private copyWithFallback(text: string): boolean {
     if (typeof document === 'undefined') return false;
 
@@ -424,47 +769,6 @@ export class DashboardComponent implements OnInit {
     }, 1800);
   }
 
-  private initChart(): void {
-    this.chartOptions = {
-      series: [
-        { name: "Citas", data: [] },
-        { name: "Ingresos", data: [] }
-      ],
-      chart: {
-        height: 260,
-        type: "area",
-        toolbar: { show: false },
-        fontFamily: 'Inter, sans-serif'
-      },
-      dataLabels: { enabled: false },
-      stroke: { curve: "smooth", width: 2 },
-      fill: {
-        type: "gradient",
-        gradient: {
-          shadeIntensity: 1,
-          opacityFrom: 0.45,
-          opacityTo: 0.05,
-          stops: [20, 100, 100, 100]
-        }
-      },
-      xaxis: {
-        categories: [],
-        axisBorder: { show: false },
-        axisTicks: { show: false }
-      },
-      yaxis: [
-        { title: { text: "Citas" } },
-        { opposite: true, title: { text: "Ingresos ($)" } }
-      ] as any,
-      grid: {
-        borderColor: "#f1f1f1",
-        strokeDashArray: 4,
-        padding: { left: 0, right: 0 }
-      },
-      tooltip: { x: { format: "dd/MM/yy" } }
-    };
-  }
-
   private loadData(): void {
     this.dashboardService.getSummary().subscribe({
       next: (data: DashboardSummary) => {
@@ -476,19 +780,6 @@ export class DashboardComponent implements OnInit {
         this.kpis[3].value = `$${fmt.format(data.kpis.monthly_balance)}`;
         this.kpis[3].trendColor = data.kpis.monthly_balance >= 0 ? 'text-success' : 'text-danger';
 
-        this.upcomingAppointments = data.upcoming_appointments;
-
-        // Actualizar Gráfico
-        this.chartOptions.series = [
-          { name: "Citas", data: data.chart_data.appointments },
-          { name: "Ingresos", data: data.chart_data.income }
-        ];
-        this.chartOptions.xaxis = {
-          categories: data.chart_data.labels,
-          axisBorder: { show: false },
-          axisTicks: { show: false }
-        };
-        
         this.loading = false;
       },
       error: () => this.loading = false

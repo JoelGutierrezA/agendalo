@@ -14,7 +14,7 @@ type GoogleIntegration = {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-api-version',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
@@ -36,7 +36,7 @@ const anonClient = createClient(supabaseUrl, anonKey, {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
@@ -44,6 +44,12 @@ Deno.serve(async (req) => {
 
     if (req.method === 'GET' && url.pathname.endsWith('/callback')) {
       return await handleCallback(url);
+    }
+
+    if (req.method === 'GET' && url.pathname.endsWith('/auth')) {
+      const token = url.searchParams.get('token') ?? '';
+      const context = await getUserContext(token);
+      return redirect(await getAuthUrl(context.businessId, context.userId));
     }
 
     if (req.method !== 'POST') {
@@ -94,16 +100,33 @@ async function requireUserContext(req: Request): Promise<{ userId: string; busin
 
   if (!token) throw new Error('Sesion no disponible.');
 
+  return getUserContext(token);
+}
+
+async function getUserContext(token: string): Promise<{ userId: string; businessId: number }> {
   const { data: userData, error: userError } = await anonClient.auth.getUser(token);
   if (userError || !userData.user) throw new Error('Sesion invalida.');
 
-  const { data: profile, error: profileError } = await serviceClient
+  let { data: profile, error: profileError } = await serviceClient
     .from('profiles')
-    .select('business_id, role, is_active')
+    .select('id, business_id, role, is_active')
     .eq('id', userData.user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || !profile?.is_active) throw new Error('Perfil no disponible.');
+  if (!profile && userData.user.email) {
+    const fallback = await serviceClient
+      .from('profiles')
+      .select('id, business_id, role, is_active')
+      .eq('email', userData.user.email)
+      .maybeSingle();
+
+    profile = fallback.data;
+    profileError = fallback.error;
+  }
+
+  if (profileError) throw new Error(`No se pudo consultar el perfil: ${profileError.message}`);
+  if (!profile) throw new Error('No existe un perfil asociado a esta cuenta.');
+  if (!profile.is_active) throw new Error('El perfil asociado a esta cuenta esta inactivo.');
   if (!profile.business_id) throw new Error('Debes tener un negocio configurado.');
 
   return {

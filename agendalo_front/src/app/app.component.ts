@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { SessionTimeoutService } from './core/auth/session-timeout.service';
 import { ToastComponent } from './shared/components/toast/toast.component';
 
 @Component({
@@ -11,4 +12,8 @@ import { ToastComponent } from './shared/components/toast/toast.component';
     <app-toast />
   `,
 })
-export class AppComponent {}
+export class AppComponent {
+  constructor(sessionTimeoutService: SessionTimeoutService) {
+    sessionTimeoutService.start();
+  }
+}

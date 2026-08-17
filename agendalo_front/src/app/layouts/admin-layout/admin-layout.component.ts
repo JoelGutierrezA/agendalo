@@ -25,8 +25,19 @@ interface NavItem {
         </div>
 
         <div class="px-5 py-4 border-b border-white/10">
-          <p class="text-[13px] text-sidebar-text uppercase tracking-wider mb-1.5">Tu negocio</p>
-          <p class="text-white text-base font-semibold truncate">{{ businessName() }}</p>
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+              @if (businessLogoUrl()) {
+                <img [src]="businessLogoUrl()" alt="Icono del negocio" class="w-full h-full object-cover">
+              } @else {
+                {{ userInitial() }}
+              }
+            </div>
+            <div class="min-w-0">
+              <p class="text-white text-base font-semibold truncate">{{ businessName() }}</p>
+              <p class="text-sidebar-text text-sm truncate">{{ userEmail() }}</p>
+            </div>
+          </div>
         </div>
 
         <nav class="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
@@ -50,17 +61,14 @@ interface NavItem {
         </nav>
 
         <div class="px-3 py-4 border-t border-white/10">
-          <div class="flex items-center gap-3 px-5 py-2.5 mb-1">
-            <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {{ userInitial() }}
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-white text-base font-semibold truncate">{{ userName() }}</p>
-              <p class="text-sidebar-text text-sm truncate">{{ userEmail() }}</p>
-            </div>
-          </div>
           <button type="button" (click)="doLogout()" class="sidebar-link w-full">
-            <span class="text-xl">↩</span>
+            <span class="w-7 h-7 flex items-center justify-center flex-shrink-0">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+            </span>
             <span>Cerrar sesión</span>
           </button>
         </div>
@@ -90,8 +98,19 @@ interface NavItem {
             </div>
 
             <div class="px-5 py-4 border-b border-white/10">
-              <p class="text-[13px] text-sidebar-text uppercase tracking-wider mb-1.5">Tu negocio</p>
-              <p class="text-white text-base font-semibold truncate">{{ businessName() }}</p>
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+                  @if (businessLogoUrl()) {
+                    <img [src]="businessLogoUrl()" alt="Icono del negocio" class="w-full h-full object-cover">
+                  } @else {
+                    {{ userInitial() }}
+                  }
+                </div>
+                <div class="min-w-0">
+                  <p class="text-white text-base font-semibold truncate">{{ businessName() }}</p>
+                  <p class="text-sidebar-text text-sm truncate">{{ userEmail() }}</p>
+                </div>
+              </div>
             </div>
 
             <nav class="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
@@ -116,17 +135,14 @@ interface NavItem {
             </nav>
 
             <div class="px-3 py-4 border-t border-white/10">
-              <div class="flex items-center gap-3 px-5 py-2.5 mb-1">
-                <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                  {{ userInitial() }}
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-white text-base font-semibold truncate">{{ userName() }}</p>
-                  <p class="text-sidebar-text text-sm truncate">{{ userEmail() }}</p>
-                </div>
-              </div>
               <button type="button" (click)="doLogout()" class="sidebar-link w-full">
-                <span class="text-xl">↩</span>
+                <span class="w-7 h-7 flex items-center justify-center flex-shrink-0">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <path d="M16 17l5-5-5-5" />
+                    <path d="M21 12H9" />
+                  </svg>
+                </span>
                 <span>Cerrar sesión</span>
               </button>
             </div>
@@ -240,9 +256,8 @@ export class AdminLayoutComponent {
     }
 
     return [
-      { label: 'Finanzas', iconPath: 'assets/Interfaz/Dashboard.png', route: '/app/dashboard' },
+      { label: 'Dashboard', iconPath: 'assets/Interfaz/Dashboard.png', route: '/app/dashboard' },
       { label: 'Agenda', iconPath: 'assets/Interfaz/Agenda.png', route: '/app/agenda' },
-      { label: 'Citas', iconPath: 'assets/Interfaz/Citas.png', route: '/app/citas' },
       { label: 'Clientes', iconPath: 'assets/Interfaz/Clientes.png', route: '/app/clientes' },
       { label: 'Servicios', iconPath: 'assets/Interfaz/Servicios.png', route: '/app/servicios' },
       { label: 'Insumos', iconPath: 'assets/Interfaz/Insumos.png', route: '/app/insumos' },
@@ -254,6 +269,10 @@ export class AdminLayoutComponent {
   userName = computed(() => this.authService.currentUser()?.name ?? '');
   userEmail = computed(() => this.authService.currentUser()?.email ?? '');
   userInitial = computed(() => (this.authService.currentUser()?.name ?? 'U')[0].toUpperCase());
+  businessLogoUrl = computed(() => {
+    if (this.authService.currentUser()?.role === 'admin_platform') return '';
+    return this.businessService.currentBusiness()?.logo_url ?? '';
+  });
   businessName = computed(() => {
     const user = this.authService.currentUser();
     if (user?.role === 'admin_platform') return 'Administración';

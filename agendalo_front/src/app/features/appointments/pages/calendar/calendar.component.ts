@@ -25,24 +25,20 @@ interface CalendarMonth {
   standalone: true,
   imports: [CommonModule, RouterModule],
   template: `
-    <div class="h-[calc(100vh-150px)] min-h-[620px] flex flex-col">
-      <div class="page-header shrink-0">
+    <div class="h-[calc(100dvh-92px)] min-h-0 flex flex-col sm:h-[calc(100dvh-120px)] lg:h-[calc(100vh-150px)] lg:min-h-[620px]">
+      <div class="page-header shrink-0 mb-3 sm:mb-4">
         <div>
           <div class="flex items-center gap-3">
             <img src="assets/Interfaz/Agenda.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
             <h1 class="page-title">{{ pageTitle }}</h1>
           </div>
         </div>
-        <div class="flex gap-2">
-          <a routerLink="/app/citas" class="btn-secondary">Lista</a>
-          <a routerLink="/app/citas/nueva" class="btn-primary"><span>+</span> Nueva cita</a>
-        </div>
       </div>
 
-      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4 shrink-0 bg-surface p-4 rounded-xl border border-border">
-        <div class="flex items-center gap-3">
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 mb-3 sm:mb-4 shrink-0 bg-surface p-3 sm:p-4 rounded-xl border border-border">
+        <div class="flex items-center justify-between gap-2">
           <button (click)="previous()" class="btn-secondary btn-sm px-3" aria-label="Periodo anterior">&larr;</button>
-          <span class="text-sm font-semibold text-text-primary min-w-[210px] text-center capitalize">{{ periodLabel }}</span>
+          <span class="text-sm font-semibold text-text-primary min-w-0 flex-1 text-center capitalize sm:min-w-[210px]">{{ periodLabel }}</span>
           <button (click)="next()" class="btn-secondary btn-sm px-3" aria-label="Periodo siguiente">&rarr;</button>
         </div>
 
@@ -65,7 +61,7 @@ interface CalendarMonth {
         </div>
       </div>
 
-      <div class="card flex-1 p-0 overflow-hidden flex flex-col">
+      <div class="card flex-1 min-h-0 p-0 overflow-hidden flex flex-col">
         @if (loading) {
           <div class="flex-1 flex items-center justify-center">
             <span class="text-text-secondary animate-pulse">Cargando agenda...</span>
@@ -106,12 +102,12 @@ interface CalendarMonth {
             </div>
           </div>
         } @else {
-          <div class="flex-1 overflow-auto bg-gray-50/30">
-            <div class="min-w-[920px] h-full flex flex-col">
+          <div class="flex-1 min-h-0 overflow-hidden md:overflow-auto bg-gray-50/30">
+            <div class="min-w-0 h-full flex flex-col md:min-w-[920px]">
               <div class="grid grid-cols-7 border-b border-border bg-surface sticky top-0 z-20 shadow-sm">
                 @for (dayName of weekdayNames; track dayName) {
-                  <div class="p-3 text-center border-r border-border last:border-0">
-                    <p class="text-[11px] uppercase font-bold tracking-wider text-text-secondary">{{ dayName }}</p>
+                  <div class="px-1 py-2 sm:p-3 text-center border-r border-border last:border-0">
+                    <p class="text-[10px] sm:text-[11px] uppercase font-bold tracking-wider text-text-secondary">{{ dayName }}</p>
                   </div>
                 }
               </div>
@@ -119,7 +115,7 @@ interface CalendarMonth {
               <div class="grid grid-cols-7 flex-1" [class.auto-rows-fr]="viewMode === 'month'">
                 @for (day of visibleDays; track day.dateStr) {
                   <div
-                    class="border-r border-b border-border last:border-r-0 relative p-2 flex flex-col gap-1.5 min-h-[70px]"
+                    class="border-r border-b border-border last:border-r-0 relative p-1 sm:p-2 flex flex-col gap-1 sm:gap-1.5 min-h-[42px] sm:min-h-[62px] lg:min-h-[70px]"
                     [class.bg-white]="day.isCurrentMonth || viewMode === 'week'"
                     [class.bg-gray-50]="!day.isCurrentMonth && viewMode === 'month'"
                   >
@@ -132,7 +128,7 @@ interface CalendarMonth {
                         [class.font-bold]="day.isToday"
                         (click)="openDay(day.date)"
                       >
-                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full"
+                        <span class="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full text-xs sm:text-sm"
                               [class.bg-primary]="day.isToday"
                               [class.text-white]="day.isToday">
                           {{ day.dayNumber }}
@@ -140,13 +136,13 @@ interface CalendarMonth {
                       </button>
 
                       @if (getEventsForDay(day.dateStr).length > 0) {
-                        <span class="text-[11px] rounded-full bg-gray-100 text-text-secondary px-2 py-0.5">
+                        <span class="text-[10px] sm:text-[11px] rounded-full bg-gray-100 text-text-secondary px-1.5 sm:px-2 py-0.5">
                           {{ getEventsForDay(day.dateStr).length }}
                         </span>
                       }
                     </div>
 
-                    <div class="flex flex-col gap-1 overflow-hidden">
+                    <div class="hidden sm:flex flex-col gap-1 overflow-hidden">
                       @for (event of getEventsForDay(day.dateStr).slice(0, viewMode === 'week' ? 8 : 3); track event.id) {
                         @if (event.extendedProps.read_only) {
                           <div

@@ -458,6 +458,10 @@ export class SettingsComponent implements OnInit {
       next: (res) => {
         this.logoPreviewUrl = res.data;
         this.businessForm.patchValue({ logo_url: res.data });
+        const currentBusiness = this.businessService.currentBusiness();
+        if (currentBusiness) {
+          this.businessService.setBusiness({ ...currentBusiness, logo_url: res.data });
+        }
         this.logoUploading = false;
         this.toastService.success('Icono del negocio actualizado');
       },
@@ -471,6 +475,10 @@ export class SettingsComponent implements OnInit {
   removeLogo(): void {
     this.logoPreviewUrl = '';
     this.businessForm.patchValue({ logo_url: '' });
+    const currentBusiness = this.businessService.currentBusiness();
+    if (currentBusiness) {
+      this.businessService.setBusiness({ ...currentBusiness, logo_url: null });
+    }
   }
 
   private loadOpeningHours(): void {

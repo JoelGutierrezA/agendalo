@@ -26,7 +26,7 @@ interface Service {
             <h1 class="page-title">{{ isEditing ? 'Editar cita' : 'Nueva cita' }}</h1>
           </div>
         </div>
-        <a routerLink="/app/citas" class="btn-secondary">Volver</a>
+        <a routerLink="/app/agenda" class="btn-secondary">Volver</a>
       </div>
 
       <div class="card relative">
@@ -128,7 +128,7 @@ interface Service {
           }
 
           <div class="flex gap-3 justify-end pt-2 border-t border-border">
-            <a routerLink="/app/citas" class="btn-secondary">Cancelar</a>
+            <a routerLink="/app/agenda" class="btn-secondary">Cancelar</a>
             <button type="submit" class="btn-primary" [disabled]="saving || loadingData">
               @if (saving) { Guardando... } @else { {{ isEditing ? 'Actualizar cita' : 'Crear cita' }} }
             </button>
@@ -339,7 +339,7 @@ export class AppointmentFormComponent implements OnInit {
         await this.appointmentsService.create(payload);
       }
 
-      this.router.navigate(['/app/citas']);
+      this.router.navigate(['/app/agenda']);
     } catch (error: any) {
       this.errorMessage = error?.message || 'Ocurrio un error al guardar la cita.';
     } finally {

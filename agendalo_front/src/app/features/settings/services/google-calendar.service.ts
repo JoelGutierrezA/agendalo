@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { defer, map, Observable } from 'rxjs';
+import { defer, Observable } from 'rxjs';
 import { SupabaseService } from '../../../core/services/supabase.service';
+import { environment } from '../../../../environments/environment';
 
 export interface GoogleCalendarStatus {
   connected: boolean;
@@ -19,9 +20,7 @@ export class GoogleCalendarService {
   }
 
   getAuthUrl(): Observable<string> {
-    return defer(() => this.invoke<{ auth_url: string }>('auth-url')).pipe(
-      map(data => data.auth_url)
-    );
+    return defer(() => this.buildAuthRedirectUrl());
   }
 
   disconnect(): Observable<void> {
@@ -55,5 +54,17 @@ export class GoogleCalendarService {
     if (data?.error) throw new Error(data.error);
 
     return data?.data as T;
+  }
+
+  private async buildAuthRedirectUrl(): Promise<string> {
+    const { data, error } = await this.supabase.client.auth.getSession();
+    const accessToken = data.session?.access_token;
+
+    if (error || !accessToken) {
+      throw new Error('Sesion no disponible.');
+    }
+
+    const baseUrl = `${environment.supabaseUrl.replace(/\/$/, '')}/functions/v1/google-calendar/auth`;
+    return `${baseUrl}?token=${encodeURIComponent(accessToken)}`;
   }
 }
