@@ -115,7 +115,7 @@ interface OpeningHour {
         </div>
       }
 
-      <div class="grid grid-cols-1 lg:grid-cols-[minmax(260px,360px)_1fr] gap-6">
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)]">
         <!-- KPI Cards -->
         <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-1">
           @for (kpi of visibleKpis(); track kpi.label) {
@@ -239,7 +239,7 @@ interface OpeningHour {
             </div>
           } @else {
             <div class="overflow-x-auto">
-              <table class="w-full min-w-[900px] text-left text-sm">
+              <table class="w-full min-w-[820px] text-left text-sm">
                 <thead class="border-b border-border bg-gray-50/70 text-xs font-bold uppercase tracking-wider text-text-secondary">
                   <tr>
                     <th class="px-4 py-3 rounded-tl-xl">Fecha</th>
