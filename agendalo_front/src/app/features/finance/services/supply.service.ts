@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { defer, Observable } from 'rxjs';
 import { BusinessService } from '../../settings/services/business.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
+import { SubscriptionService } from '../../subscription/services/subscription.service';
 
 export interface Supply {
   id: number;
@@ -30,11 +31,13 @@ export interface SupplyTransaction {
 export class SupplyService {
   constructor(
     private businessService: BusinessService,
-    private supabase: SupabaseService
+    private supabase: SupabaseService,
+    private subscriptionService: SubscriptionService
   ) {}
 
   getCatalog(): Observable<{ data: Supply[] }> {
     return defer(async () => {
+      this.requireSuppliesFeature();
       const business = this.requireBusiness();
       const { data, error } = await this.supabase.client
         .from('supplies')
@@ -50,6 +53,8 @@ export class SupplyService {
 
   createSupply(data: { name: string; description?: string }): Observable<{ data: Supply }> {
     return defer(async () => {
+      this.requireSuppliesFeature();
+      this.requireOperationalAccess();
       const business = this.requireBusiness();
       const name = data.name.trim();
 
@@ -81,6 +86,7 @@ export class SupplyService {
 
   getPurchases(): Observable<{ data: { data: SupplyTransaction[] } }> {
     return defer(async () => {
+      this.requireSuppliesFeature();
       const business = this.requireBusiness();
       const { data, error } = await this.supabase.client
         .from('supply_transactions')
@@ -113,6 +119,8 @@ export class SupplyService {
     notes?: string | null;
   }): Observable<{ data: SupplyTransaction }> {
     return defer(async () => {
+      this.requireSuppliesFeature();
+      this.requireOperationalAccess();
       const business = this.requireBusiness();
       const supplyId = Number(payload.supply_id);
       const quantity = Number(payload.quantity);
@@ -175,6 +183,8 @@ export class SupplyService {
 
   deletePurchase(id: number): Observable<{ data: null }> {
     return defer(async () => {
+      this.requireSuppliesFeature();
+      this.requireOperationalAccess();
       const business = this.requireBusiness();
       const { data: purchase, error: purchaseError } = await this.supabase.client
         .from('supply_transactions')
@@ -207,6 +217,8 @@ export class SupplyService {
   }
 
   private async ensureSupplyExpenseCategory(businessId: number): Promise<{ id: number }> {
+    this.requireSuppliesFeature();
+
     const name = 'Compra de Insumos';
     const { data: existing, error: existingError } = await this.supabase.client
       .from('expense_categories')
@@ -236,5 +248,17 @@ export class SupplyService {
     const business = this.businessService.currentBusiness();
     if (!business) throw new Error('No hay un negocio seleccionado.');
     return business;
+  }
+
+  private requireSuppliesFeature(): void {
+    if (!this.subscriptionService.hasFeature('supplies')) {
+      throw new Error('Esta funcion esta disponible en el plan Premium.');
+    }
+  }
+
+  private requireOperationalAccess(): void {
+    if (!this.subscriptionService.canOperate()) {
+      throw new Error('Tu suscripcion esta en periodo de gracia. Puedes consultar insumos, pero debes renovar para realizar cambios.');
+    }
   }
 }

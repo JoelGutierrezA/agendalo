@@ -6,6 +6,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
 import { ToastService } from '../../../../core/services/toast.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { BusinessService } from '../../../settings/services/business.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 interface Client {
   id: number;
@@ -32,7 +33,7 @@ interface Client {
             <h1 class="page-title">Clientes</h1>
           </div>
         </div>
-        <button class="btn-primary flex-shrink-0" (click)="openModal()">
+        <button class="btn-primary flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="!canOperate()" (click)="openModal()">
           <span>+</span> Nuevo cliente
         </button>
       </div>
@@ -126,7 +127,8 @@ interface Client {
                         <button
                           type="button"
                           (click)="openModal(client)"
-                          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-primary-light hover:text-primary"
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-primary-light hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                          [disabled]="!canOperate()"
                           title="Editar"
                           aria-label="Editar cliente"
                         >
@@ -138,7 +140,8 @@ interface Client {
                         <button
                           type="button"
                           (click)="deleteClient(client)"
-                          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600"
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          [disabled]="!canOperate()"
                           title="Eliminar"
                           aria-label="Eliminar cliente"
                         >
@@ -252,7 +255,8 @@ export class ClientsListComponent implements OnInit {
     private fb: FormBuilder,
     private toastService: ToastService,
     private businessService: BusinessService,
-    private supabase: SupabaseService
+    private supabase: SupabaseService,
+    private subscriptionService: SubscriptionService
   ) {
     this.clientForm = this.fb.group({
       name: ['', Validators.required],
@@ -306,6 +310,8 @@ export class ClientsListComponent implements OnInit {
   }
 
   openModal(client?: Client): void {
+    if (!this.assertOperationAllowed()) return;
+
     if (client) {
       this.isEditing = true;
       this.editingId = client.id;
@@ -329,6 +335,8 @@ export class ClientsListComponent implements OnInit {
   }
 
   async saveClient(): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+
     if (this.clientForm.invalid) {
       this.clientForm.markAllAsTouched();
       return;
@@ -374,6 +382,8 @@ export class ClientsListComponent implements OnInit {
   }
 
   async deleteClient(client: Client): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+
     if (!confirm(`Eliminar a ${client.name}?`)) return;
 
     const business = this.businessService.currentBusiness();
@@ -395,6 +405,17 @@ export class ClientsListComponent implements OnInit {
 
     this.toastService.success('Cliente eliminado');
     await this.loadClients();
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
+  }
+
+  private assertOperationAllowed(): boolean {
+    if (this.subscriptionService.canOperate()) return true;
+
+    this.toastService.error('Tu suscripcion esta en periodo de gracia. Puedes consultar clientes, pero debes renovar para realizar cambios.');
+    return false;
   }
 
   formatDate(dateStr: string): string {

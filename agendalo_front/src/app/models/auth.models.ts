@@ -84,6 +84,9 @@ export interface OpeningHour {
 // Modelos de Servicio
 // ============================================================
 
+export type ServiceModality = 'presencial' | 'online';
+export type GoogleConferenceStatus = 'none' | 'pending' | 'created' | 'failed';
+
 export interface Service {
   id: number;
   business_id: number;
@@ -92,6 +95,8 @@ export interface Service {
   duration_minutes: number;
   price: number;
   is_active: boolean;
+  modality: ServiceModality;
+  generate_google_meet: boolean;
 }
 
 // ============================================================
@@ -130,6 +135,11 @@ export interface Appointment {
   client_phone: string | null;
   scheduled_at: string; // ISO 8601
   duration_minutes: number;
+  service_modality: ServiceModality | null;
+  generate_google_meet: boolean;
+  google_meet_url: string | null;
+  google_conference_id: string | null;
+  google_conference_status: GoogleConferenceStatus;
   status: AppointmentStatus;
   notes: string | null;
   is_from_public: boolean;

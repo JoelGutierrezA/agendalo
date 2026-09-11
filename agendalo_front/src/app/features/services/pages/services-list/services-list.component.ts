@@ -5,6 +5,8 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
 import { ToastService } from '../../../../core/services/toast.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { BusinessService } from '../../../settings/services/business.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
+import type { ServiceModality } from '../../../../models/auth.models';
 
 interface Service {
   id: number;
@@ -14,6 +16,8 @@ interface Service {
   duration_minutes: number;
   price: number;
   is_active: boolean;
+  modality: ServiceModality;
+  generate_google_meet: boolean;
 }
 
 @Component({
@@ -27,7 +31,7 @@ interface Service {
           <img src="assets/Interfaz/Servicios.png" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" aria-hidden="true">
           <h1 class="page-title">Servicios</h1>
         </div>
-        <button class="btn-primary" (click)="openModal()">
+        <button class="btn-primary disabled:cursor-not-allowed disabled:opacity-50" [disabled]="!canOperate()" (click)="openModal()">
           <span>+</span> Nuevo servicio
         </button>
       </div>
@@ -81,7 +85,8 @@ interface Service {
                   <td class="px-5 py-3.5 text-center">
                     <button
                       (click)="toggleActive(service)"
-                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      [disabled]="!canOperate()"
                       [class]="service.is_active
                         ? 'bg-green-100 text-green-700 hover:bg-green-200'
                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
@@ -95,7 +100,8 @@ interface Service {
                       <button
                         type="button"
                         (click)="openModal(service)"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-primary-light hover:text-primary"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-primary-light hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                        [disabled]="!canOperate()"
                         title="Editar"
                         aria-label="Editar servicio"
                       >
@@ -107,7 +113,8 @@ interface Service {
                       <button
                         type="button"
                         (click)="confirmDelete(service)"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        [disabled]="!canOperate()"
                         title="Eliminar"
                         aria-label="Eliminar servicio"
                       >
@@ -224,7 +231,8 @@ export class ServicesListComponent implements OnInit {
     private fb: FormBuilder,
     private toastService: ToastService,
     private businessService: BusinessService,
-    private supabase: SupabaseService
+    private supabase: SupabaseService,
+    private subscriptionService: SubscriptionService
   ) {
     this.form = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(255)]],
@@ -268,6 +276,8 @@ export class ServicesListComponent implements OnInit {
   }
 
   openModal(service?: Service): void {
+    if (!this.assertOperationAllowed()) return;
+
     this.editingId = service?.id ?? null;
     this.form.reset({
       name: service?.name ?? '',
@@ -285,6 +295,8 @@ export class ServicesListComponent implements OnInit {
   }
 
   onSubmit(): void {
+    if (!this.assertOperationAllowed()) return;
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -336,6 +348,8 @@ export class ServicesListComponent implements OnInit {
   }
 
   toggleActive(service: Service): void {
+    if (!this.assertOperationAllowed()) return;
+
     const business = this.businessService.currentBusiness();
     if (!business) return;
 
@@ -362,10 +376,14 @@ export class ServicesListComponent implements OnInit {
   }
 
   confirmDelete(service: Service): void {
+    if (!this.assertOperationAllowed()) return;
+
     this.deletingService = service;
   }
 
   deleteService(): void {
+    if (!this.assertOperationAllowed()) return;
+
     const business = this.businessService.currentBusiness();
     if (!this.deletingService || !business) return;
 
@@ -390,6 +408,17 @@ export class ServicesListComponent implements OnInit {
       });
   }
 
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
+  }
+
+  private assertOperationAllowed(): boolean {
+    if (this.subscriptionService.canOperate()) return true;
+
+    this.toastService.error('Tu suscripcion esta en periodo de gracia. Puedes consultar servicios, pero debes renovar para realizar cambios.');
+    return false;
+  }
+
   private mapService(row: any): Service {
     return {
       id: row.id,
@@ -399,6 +428,8 @@ export class ServicesListComponent implements OnInit {
       duration_minutes: row.duration_minutes,
       price: Number(row.price),
       is_active: row.is_active,
+      modality: row.modality === 'online' ? 'online' : 'presencial',
+      generate_google_meet: row.modality === 'online' && row.generate_google_meet === true,
     };
   }
 }

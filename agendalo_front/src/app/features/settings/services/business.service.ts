@@ -54,6 +54,11 @@ export class BusinessService {
         throw new Error(authError?.message ?? 'Sesion no disponible.');
       }
 
+      const existingBusiness = await this.resolveExistingBusinessForUser(authUser.id);
+      if (existingBusiness) {
+        return this.wrap(existingBusiness);
+      }
+
       const { data: business, error: businessError } = await this.supabase.client
         .from('businesses')
         .insert({
@@ -77,17 +82,9 @@ export class BusinessService {
         throw new Error(businessError?.message ?? 'No se pudo crear el negocio.');
       }
 
-      const { error: profileError } = await this.supabase.client
-        .from('profiles')
-        .update({ business_id: business.id })
-        .eq('id', authUser.id);
+      await this.assignInitialBusiness(business.id);
 
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-
-      await this.createDefaultSettings(business.id);
-      await this.createDefaultOpeningHours(business.id);
+      await this.ensureInitialBusinessData(business.id);
 
       this.authService.setCurrentUserBusinessId(business.id);
 
@@ -308,9 +305,102 @@ export class BusinessService {
 
     const { error } = await this.supabase.client
       .from('opening_hours')
-      .insert(rows);
+      .upsert(rows, { onConflict: 'business_id,day_of_week' });
 
     if (error) throw new Error(error.message);
+  }
+
+  private async createTrialSubscription(_businessId: number): Promise<void> {
+    const { error } = await this.supabase.client.rpc('create_initial_business_trial');
+
+    if (error) {
+      if (this.isMissingSubscriptionSchema(error)) return;
+      throw new Error(error.message);
+    }
+  }
+
+  private isMissingSubscriptionSchema(error: any): boolean {
+    const code = String(error?.code ?? '');
+    const message = String(error?.message ?? '');
+
+    return ['PGRST200', 'PGRST205', '42703'].includes(code)
+      || message.includes('business_subscriptions')
+      || message.includes('plans');
+  }
+
+  private async resolveExistingBusinessForUser(userId: string): Promise<Business | null> {
+    const { data: profile, error: profileError } = await this.supabase.client
+      .from('profiles')
+      .select('business_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError) {
+      throw new Error(profileError.message);
+    }
+
+    if (profile?.business_id) {
+      const business = await this.fetchBusinessById(profile.business_id);
+      this.authService.setCurrentUserBusinessId(business.id);
+      return business;
+    }
+
+    const { data: ownedBusiness, error: ownedBusinessError } = await this.supabase.client
+      .from('businesses')
+      .select(`
+        *,
+        category:categories(*),
+        settings:business_settings(*)
+      `)
+      .eq('owner_id', userId)
+      .order('id', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (ownedBusinessError) {
+      throw new Error(ownedBusinessError.message);
+    }
+
+    if (!ownedBusiness) return null;
+
+    const business = this.mapBusiness(ownedBusiness);
+    await this.assignInitialBusiness(business.id);
+    await this.ensureInitialBusinessData(business.id);
+    this.authService.setCurrentUserBusinessId(business.id);
+
+    return business;
+  }
+
+  private async assignInitialBusiness(businessId: number): Promise<void> {
+    const { error } = await this.supabase.client.rpc('assign_initial_business', {
+      target_business_id: businessId,
+    });
+
+    if (error) throw new Error(error.message);
+  }
+
+  private async fetchBusinessById(businessId: number): Promise<Business> {
+    const { data, error } = await this.supabase.client
+      .from('businesses')
+      .select(`
+        *,
+        category:categories(*),
+        settings:business_settings(*)
+      `)
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      throw new Error(error?.message ?? 'No se pudo cargar el negocio.');
+    }
+
+    return this.mapBusiness(data);
+  }
+
+  private async ensureInitialBusinessData(businessId: number): Promise<void> {
+    await this.createDefaultSettings(businessId);
+    await this.createDefaultOpeningHours(businessId);
+    await this.createTrialSubscription(businessId);
   }
 
   private saveBusiness(business: Business): void {

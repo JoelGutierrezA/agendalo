@@ -1,20 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { RouterModule } from '@angular/router';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { PublicFooterComponent } from '../../../../shared/components/public-footer/public-footer.component';
-
-type RegisterStep = 'account' | 'payment';
-
-interface RegisterPlan {
-  id: string;
-  name: string;
-  price: string;
-  description: string;
-  features: string[];
-}
 
 @Component({
   selector: 'app-register',
@@ -40,35 +30,35 @@ interface RegisterPlan {
       </header>
 
       <main class="flex-1 bg-gradient-to-br from-primary-light via-white to-blue-50 flex items-center justify-center p-4">
-        <div class="w-full max-w-3xl py-10">
+        <div class="w-full max-w-md py-10">
           <div class="text-center mb-8">
             <div class="flex justify-center h-12 mb-4">
               <img src="assets/Skedia%20Fondo%20Blanco.png" alt="Skedia" class="h-full w-auto object-contain">
             </div>
-            <h1 class="text-2xl font-bold text-text-primary">
-              {{ step === 'account' ? 'Crea tu cuenta' : 'Elige tu plan' }}
-            </h1>
+            <h1 class="text-2xl font-bold text-text-primary">Solicita tu acceso</h1>
             <p class="text-text-secondary mt-1">
-              {{ step === 'account' ? 'Primero registra tus datos. La cuenta quedara pendiente despues del pago.' : 'Pago mock: al confirmar enviaremos tu solicitud.' }}
+              Crea tu cuenta y un administrador revisara tu solicitud.
             </p>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-4 items-start">
-            <section class="card p-5">
-              <div class="flex items-center gap-3 mb-5">
-                <span
-                  class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                  [ngClass]="step === 'account' ? 'bg-primary text-white' : 'bg-primary-light text-primary'"
-                >
-                  1
-                </span>
-                <div>
-                  <p class="font-semibold text-text-primary">Datos de acceso</p>
-                  <p class="text-xs text-text-secondary">Nombre, correo y contrasena</p>
-                </div>
+          @if (submitted) {
+            <section class="card p-6 text-center">
+              <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary-light text-primary">
+                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
               </div>
-
-              <form [formGroup]="form" (ngSubmit)="continueToPayment()" class="space-y-4">
+              <h2 class="text-xl font-bold text-text-primary">Solicitud enviada</h2>
+              <p class="mt-3 text-sm leading-6 text-text-secondary">
+                Tu cuenta esta pendiente de aprobacion. Podras ingresar a Skedia una vez que tu solicitud sea aprobada.
+              </p>
+              <a routerLink="/login" class="btn-primary mt-6 w-full justify-center py-2.5">
+                Ir a iniciar sesion
+              </a>
+            </section>
+          } @else {
+            <section class="card p-5">
+              <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-4">
                 <div>
                   <label class="form-label">Nombre</label>
                   <input
@@ -128,7 +118,11 @@ interface RegisterPlan {
                   class="btn-primary w-full justify-center py-2.5"
                   [disabled]="loading"
                 >
-                  Continuar al pago
+                  @if (loading) {
+                    Enviando solicitud...
+                  } @else {
+                    Solicitar acceso
+                  }
                 </button>
               </form>
 
@@ -137,77 +131,7 @@ interface RegisterPlan {
                 <a routerLink="/login" class="text-primary font-medium hover:underline">Inicia sesion</a>
               </p>
             </section>
-
-            <section class="card p-5" [ngClass]="step === 'account' ? 'opacity-70' : ''">
-              <div class="flex items-center gap-3 mb-5">
-                <span
-                  class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                  [ngClass]="step === 'payment' ? 'bg-primary text-white' : 'bg-slate-100 text-text-secondary'"
-                >
-                  2
-                </span>
-                <div>
-                  <p class="font-semibold text-text-primary">Suscripcion</p>
-                  <p class="text-xs text-text-secondary">Selecciona un plan y confirma el pago</p>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                @for (plan of plans; track plan.id) {
-                  <button
-                    type="button"
-                    (click)="selectPlan(plan.id)"
-                    class="text-left rounded-lg border p-3 transition-all bg-white"
-                    [disabled]="step === 'account' || loading"
-                    [ngClass]="selectedPlan === plan.id ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-primary/50'"
-                  >
-                    <p class="font-semibold text-text-primary">{{ plan.name }}</p>
-                    <p class="text-lg font-bold text-primary mt-1">{{ plan.price }}</p>
-                    <p class="text-xs text-text-secondary mt-1">{{ plan.description }}</p>
-                  </button>
-                }
-              </div>
-
-              <div class="mt-5 rounded-lg border border-dashed border-primary/40 bg-primary-light/40 p-4">
-                <p class="font-semibold text-text-primary">Pasarela de pago mock</p>
-                <p class="text-sm text-text-secondary mt-1">
-                  Por ahora no se cobrara nada. Al presionar pagar simulamos el pago y dejamos tu cuenta pendiente de aprobacion.
-                </p>
-
-                <ul class="mt-3 space-y-2 text-sm text-text-secondary">
-                  @for (feature of currentPlan.features; track feature) {
-                    <li class="flex gap-2">
-                      <span class="text-primary font-bold">+</span>
-                      <span>{{ feature }}</span>
-                    </li>
-                  }
-                </ul>
-              </div>
-
-              <div class="mt-5 flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  class="btn-secondary w-full justify-center py-2.5"
-                  (click)="backToAccount()"
-                  [disabled]="step === 'account' || loading"
-                >
-                  Volver
-                </button>
-                <button
-                  type="button"
-                  class="btn-primary w-full justify-center py-2.5"
-                  (click)="payAndCreateAccount()"
-                  [disabled]="step === 'account' || loading"
-                >
-                  @if (loading) {
-                    Enviando solicitud...
-                  } @else {
-                    Pagar y crear cuenta
-                  }
-                </button>
-              </div>
-            </section>
-          </div>
+          }
         </div>
       </main>
 
@@ -219,37 +143,11 @@ export class RegisterComponent {
   form: FormGroup;
   loading = false;
   showPassword = false;
-  step: RegisterStep = 'account';
-  selectedPlan = 'medio';
-
-  plans: RegisterPlan[] = [
-    {
-      id: 'basico',
-      name: 'Basico',
-      price: '$9.990',
-      description: 'Para comenzar',
-      features: ['Agenda online', 'Clientes y servicios', 'Panel de finanzas'],
-    },
-    {
-      id: 'medio',
-      name: 'Medio',
-      price: '$19.990',
-      description: 'Para negocios activos',
-      features: ['Todo lo del plan Basico', 'Gestion de citas', 'Reportes principales'],
-    },
-    {
-      id: 'premium',
-      name: 'Premium',
-      price: '$29.990',
-      description: 'Para crecer',
-      features: ['Todo lo del plan Medio', 'Equipo y permisos', 'Soporte prioritario'],
-    },
-  ];
+  submitted = false;
 
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router,
     private toastService: ToastService
   ) {
     this.form = this.fb.group({
@@ -259,31 +157,9 @@ export class RegisterComponent {
     });
   }
 
-  get currentPlan(): RegisterPlan {
-    return this.plans.find(plan => plan.id === this.selectedPlan) ?? this.plans[0];
-  }
-
-  continueToPayment(): void {
+  onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      return;
-    }
-
-    this.step = 'payment';
-  }
-
-  selectPlan(planId: string): void {
-    this.selectedPlan = planId;
-  }
-
-  backToAccount(): void {
-    this.step = 'account';
-  }
-
-  payAndCreateAccount(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      this.step = 'account';
       return;
     }
 
@@ -301,9 +177,9 @@ export class RegisterComponent {
       password,
       password_confirmation: password,
     }).subscribe({
-      next: (res) => {
-        this.toastService.success(`${res.message} Plan solicitado: ${this.currentPlan.name}.`, 7000);
-        this.router.navigate(['/login']);
+      next: () => {
+        this.submitted = true;
+        this.toastService.success('Solicitud enviada', 7000);
       },
       error: (err) => {
         this.toastService.error(err?.message ?? 'No se pudo crear la cuenta');

@@ -5,6 +5,7 @@ import { Router, RouterModule } from '@angular/router';
 import { ToastService } from '../../../../core/services/toast.service';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../services/appointments.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 @Component({
   selector: 'app-appointments-list',
@@ -21,7 +22,9 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
         </div>
         <div class="flex gap-2 w-full sm:w-auto">
           <a routerLink="/app/agenda" class="btn-secondary flex-1 sm:flex-none justify-center">Calendario</a>
-          <a routerLink="/app/citas/nueva" class="btn-primary flex-1 sm:flex-none justify-center"><span>+</span> Nueva cita</a>
+          @if (canOperate()) {
+            <a routerLink="/app/citas/nueva" class="btn-primary flex-1 sm:flex-none justify-center"><span>+</span> Nueva cita</a>
+          }
         </div>
       </div>
 
@@ -82,8 +85,8 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
             icon="📋"
             title="No hay citas"
             [description]="hasFilters() ? 'Ninguna cita coincide con los filtros de búsqueda.' : 'Crea tu primera cita o espera reservas públicas.'"
-            [actionLabel]="!hasFilters() ? 'Crear primera cita' : undefined"
-            (onAction)="router.navigate(['/app/citas/nueva'])"
+            [actionLabel]="!hasFilters() && canOperate() ? 'Crear primera cita' : undefined"
+            (onAction)="goToNewAppointment()"
           ></app-empty-state>
         } @else {
           <div class="overflow-x-auto">
@@ -135,7 +138,7 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
                           [ngModel]="apt.status"
                           (change)="updateStatus(apt, $event)"
                           title="Cambiar estado"
-                          [disabled]="statusUpdating === apt.id"
+                          [disabled]="statusUpdating === apt.id || !canOperate()"
                         >
                           <option value="pending">Marcar pendiente</option>
                           <option value="confirmed">Marcar confirmada</option>
@@ -144,11 +147,13 @@ import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../se
                           <option value="cancelled">Cancelar cita</option>
                         </select>
 
-                        <a
-                          [routerLink]="['/app/citas', apt.id, 'editar']"
-                          class="p-1.5 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-primary-light"
-                          title="Editar"
-                        >Editar</a>
+                        @if (canOperate()) {
+                          <a
+                            [routerLink]="['/app/citas', apt.id, 'editar']"
+                            class="p-1.5 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-primary-light"
+                            title="Editar"
+                          >Editar</a>
+                        }
                       </div>
                     </td>
                   </tr>
@@ -178,7 +183,8 @@ export class AppointmentsListComponent implements OnInit {
   constructor(
     public router: Router,
     private toastService: ToastService,
-    private appointmentsService: AppointmentsService
+    private appointmentsService: AppointmentsService,
+    private subscriptionService: SubscriptionService
   ) {}
 
   ngOnInit(): void {
@@ -200,6 +206,11 @@ export class AppointmentsListComponent implements OnInit {
     const select = event.target as HTMLSelectElement;
     const newStatus = select.value as AppointmentStatus;
 
+    if (!this.assertOperationAllowed()) {
+      select.value = apt.status;
+      return;
+    }
+
     if (newStatus === 'cancelled' && !confirm('¿Estás seguro de que deseas cancelar esta cita?')) {
       select.value = apt.status;
       return;
@@ -218,6 +229,22 @@ export class AppointmentsListComponent implements OnInit {
     } finally {
       this.statusUpdating = null;
     }
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
+  }
+
+  goToNewAppointment(): void {
+    if (!this.assertOperationAllowed()) return;
+    this.router.navigate(['/app/citas/nueva']);
+  }
+
+  private assertOperationAllowed(): boolean {
+    if (this.subscriptionService.canOperate()) return true;
+
+    this.toastService.error('Tu suscripcion esta en periodo de gracia. Puedes consultar citas, pero debes renovar para realizar cambios.');
+    return false;
   }
 
   hasFilters(): boolean {

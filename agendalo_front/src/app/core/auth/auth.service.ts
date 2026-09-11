@@ -76,7 +76,10 @@ export class AuthService {
         email: payload.email,
         password: payload.password,
         options: {
-          data: { name: payload.name },
+          data: {
+            name: payload.name,
+            is_active: false,
+          },
         },
       });
 
@@ -85,15 +88,6 @@ export class AuthService {
       }
 
       if (data.session) {
-        const { error: profileError } = await this.supabase.client
-          .from('profiles')
-          .update({ is_active: false })
-          .eq('id', data.user.id);
-
-        if (profileError) {
-          throw new Error(profileError.message);
-        }
-
         await this.supabase.client.auth.signOut();
         this.clearSession();
       }

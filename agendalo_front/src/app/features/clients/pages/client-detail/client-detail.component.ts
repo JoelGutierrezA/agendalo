@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { BusinessService } from '../../../settings/services/business.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 interface AppointmentHistory {
   id: number;
@@ -82,9 +83,11 @@ interface ClientDetail {
               }
 
               <div class="mt-6 pt-6 border-t border-border flex flex-col gap-3">
-                <a [routerLink]="['/app/citas/nueva']" [queryParams]="{ client: client.id }" class="btn-primary w-full justify-center">
-                  Agendar cita
-                </a>
+                @if (canOperate()) {
+                  <a [routerLink]="['/app/citas/nueva']" [queryParams]="{ client: client.id }" class="btn-primary w-full justify-center">
+                    Agendar cita
+                  </a>
+                }
               </div>
             </div>
           </div>
@@ -166,7 +169,8 @@ export class ClientDetailComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private businessService: BusinessService,
-    private supabase: SupabaseService
+    private supabase: SupabaseService,
+    private subscriptionService: SubscriptionService
   ) {}
 
   ngOnInit(): void {
@@ -280,6 +284,10 @@ export class ClientDetailComponent implements OnInit {
       no_show: 'No asistió',
     };
     return map[status] || status;
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
   }
 
   private getLastCompletedVisit(history: AppointmentHistory[]): string | null {

@@ -7,7 +7,7 @@
         <h1 class="text-3xl font-bold text-text-primary tracking-tight">Insumos y Compras</h1>
       </div>
     </div>
-    <button (click)="openPurchaseModal()" class="btn-primary flex items-center gap-2">
+    <button (click)="openPurchaseModal()" class="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="!canOperate()">
       <span class="text-lg">+</span> Registrar Compra
     </button>
   </div>
@@ -16,7 +16,7 @@
   <div class="card p-0 overflow-hidden flex-1 flex flex-col">
     <div class="px-6 py-4 border-b border-border bg-surface/50 flex justify-between items-center">
       <h2 class="font-semibold text-text-primary">Historial de Abastecimiento</h2>
-      <button (click)="openCatalogModal()" class="text-sm text-primary hover:text-primary-hover font-medium flex items-center gap-1">
+      <button (click)="openCatalogModal()" class="text-sm text-primary hover:text-primary-hover font-medium flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="!canOperate()">
         <span>+</span> Añadir Insumo al Catálogo
       </button>
     </div>
@@ -61,7 +61,8 @@
                 </td>
                 <td class="px-6 py-4 text-right">
                   <button (click)="deletePurchase(item.id)" 
-                          class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          [disabled]="!canOperate()"
                           title="Revertir Compra">
                     Eliminar
                   </button>
@@ -107,7 +108,7 @@
                 <option [value]="c.id">{{ c.name }}</option>
               }
             </select>
-            <button type="button" (click)="openCatalogModal()" class="px-3 border border-border rounded-lg hover:bg-gray-50 text-xl" title="Nuevo Insumo">
+            <button type="button" (click)="openCatalogModal()" class="px-3 border border-border rounded-lg hover:bg-gray-50 text-xl disabled:cursor-not-allowed disabled:opacity-50" [disabled]="!canOperate()" title="Nuevo Insumo">
               +
             </button>
           </div>
@@ -155,7 +156,7 @@
       <!-- Actions -->
       <div class="mt-6 flex gap-3 justify-end">
         <button type="button" (click)="showPurchaseModal = false" class="btn-secondary">Cancelar</button>
-        <button type="submit" class="btn-primary" [disabled]="purchaseForm.invalid">Guardar Compra</button>
+        <button type="submit" class="btn-primary" [disabled]="purchaseForm.invalid || !canOperate()">Guardar Compra</button>
       </div>
     </form>
   </div>
@@ -184,7 +185,7 @@
       </div>
       <div class="mt-6 flex gap-3 justify-end">
         <button type="button" (click)="showCatalogModal = false" class="btn-secondary">Cancelar</button>
-        <button type="submit" class="btn-primary" [disabled]="catalogForm.invalid">Guardar</button>
+        <button type="submit" class="btn-primary" [disabled]="catalogForm.invalid || !canOperate()">Guardar</button>
       </div>
     </form>
   </div>

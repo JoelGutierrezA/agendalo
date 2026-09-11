@@ -91,8 +91,11 @@ create table if not exists public.services (
   duration_minutes integer not null check (duration_minutes > 0),
   price numeric(12, 2) not null default 0,
   is_active boolean not null default true,
+  modality text not null default 'presencial' check (modality in ('presencial', 'online')),
+  generate_google_meet boolean not null default false,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint services_meet_requires_online_check check (not (modality = 'presencial' and generate_google_meet = true))
 );
 
 create table if not exists public.clients (
@@ -117,13 +120,19 @@ create table if not exists public.appointments (
   client_phone text,
   scheduled_at timestamptz not null,
   duration_minutes integer not null check (duration_minutes > 0),
+  service_modality text check (service_modality is null or service_modality in ('presencial', 'online')),
+  generate_google_meet boolean not null default false,
+  google_meet_url text,
+  google_conference_id text,
+  google_conference_status text not null default 'none' check (google_conference_status in ('none', 'pending', 'created', 'failed')),
   status text not null default 'pending' check (status in ('pending', 'confirmed', 'completed', 'cancelled', 'no_show')),
   notes text,
   is_from_public boolean not null default false,
   google_event_id text,
   cancelled_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint appointments_meet_requires_online_check check (not (service_modality = 'presencial' and generate_google_meet = true))
 );
 
 create table if not exists public.income_records (

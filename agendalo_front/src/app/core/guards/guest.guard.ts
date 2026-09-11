@@ -25,9 +25,9 @@ export const guestGuard: CanActivateFn = () => {
   if (user?.business_id) {
     return businessService.getBusiness().pipe(
       map(() => router.createUrlTree(['/app/dashboard'])),
-      catchError(() => of(router.createUrlTree(['/onboarding'])))
+      catchError(() => of(router.createUrlTree(['/app/dashboard'])))
     );
   }
 
-  return router.createUrlTree(['/onboarding']);
+  return router.createUrlTree(['/app/dashboard']);
 };

@@ -3,8 +3,18 @@ import { BusinessService } from '../../settings/services/business.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { GoogleCalendarService } from '../../settings/services/google-calendar.service';
 import { environment } from '../../../../environments/environment';
+import { SubscriptionService } from '../../subscription/services/subscription.service';
+import type { GoogleConferenceStatus, ServiceModality } from '../../../models/auth.models';
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+export type { GoogleConferenceStatus, ServiceModality } from '../../../models/auth.models';
+
+interface ServiceSnapshot {
+  duration_minutes: number;
+  price: number;
+  modality: ServiceModality;
+  generate_google_meet: boolean;
+}
 
 export interface AppointmentRow {
   id: number;
@@ -16,6 +26,11 @@ export interface AppointmentRow {
   client_phone: string | null;
   scheduled_at: string;
   duration_minutes: number;
+  service_modality: ServiceModality | null;
+  generate_google_meet: boolean;
+  google_meet_url: string | null;
+  google_conference_id: string | null;
+  google_conference_status: GoogleConferenceStatus;
   status: AppointmentStatus;
   notes: string | null;
   is_from_public: boolean;
@@ -60,7 +75,8 @@ export class AppointmentsService {
   constructor(
     private businessService: BusinessService,
     private supabase: SupabaseService,
-    private googleCalendarService: GoogleCalendarService
+    private googleCalendarService: GoogleCalendarService,
+    private subscriptionService: SubscriptionService
   ) {}
 
   async list(filters: AppointmentFilters = {}): Promise<AppointmentRow[]> {
@@ -172,6 +188,7 @@ export class AppointmentsService {
   }
 
   async create(payload: AppointmentPayload): Promise<AppointmentRow> {
+    this.assertCanOperate();
     const business = this.requireBusiness();
     const service = await this.getService(payload.service_id, business.id);
     const clientId = await this.upsertClient(business.id, payload);
@@ -198,6 +215,8 @@ export class AppointmentsService {
         client_phone: payload.client_phone || null,
         scheduled_at: payload.scheduled_at,
         duration_minutes: service.duration_minutes,
+        service_modality: service.modality,
+        generate_google_meet: service.generate_google_meet,
         status: payload.status,
         notes: payload.notes || null,
         is_from_public: false,
@@ -217,10 +236,12 @@ export class AppointmentsService {
   }
 
   async update(id: number, payload: AppointmentPayload): Promise<AppointmentRow> {
+    this.assertCanOperate();
     const business = this.requireBusiness();
     const current = await this.find(id);
     const service = await this.getService(payload.service_id, business.id);
     const clientId = await this.upsertClient(business.id, payload);
+    const serviceChanged = current.service_id !== payload.service_id;
 
     await this.assertScheduleAvailable(
       business.id,
@@ -236,19 +257,29 @@ export class AppointmentsService {
       );
     }
 
+    const updatePayload: Record<string, unknown> = {
+      client_id: clientId,
+      service_id: payload.service_id,
+      client_name: payload.client_name,
+      client_email: payload.client_email || null,
+      client_phone: payload.client_phone || null,
+      scheduled_at: payload.scheduled_at,
+      duration_minutes: service.duration_minutes,
+      status: payload.status,
+      notes: payload.notes || null,
+    };
+
+    if (serviceChanged) {
+      updatePayload['service_modality'] = service.modality;
+      updatePayload['generate_google_meet'] = service.generate_google_meet;
+      updatePayload['google_meet_url'] = null;
+      updatePayload['google_conference_id'] = null;
+      updatePayload['google_conference_status'] = 'none';
+    }
+
     const { data, error } = await this.supabase.client
       .from('appointments')
-      .update({
-        client_id: clientId,
-        service_id: payload.service_id,
-        client_name: payload.client_name,
-        client_email: payload.client_email || null,
-        client_phone: payload.client_phone || null,
-        scheduled_at: payload.scheduled_at,
-        duration_minutes: service.duration_minutes,
-        status: payload.status,
-        notes: payload.notes || null,
-      })
+      .update(updatePayload)
       .eq('id', id)
       .eq('business_id', business.id)
       .select(`
@@ -266,6 +297,7 @@ export class AppointmentsService {
   }
 
   async updateStatus(appointment: AppointmentRow, status: AppointmentStatus): Promise<AppointmentRow> {
+    this.assertCanOperate();
     const business = this.requireBusiness();
     const oldStatus = appointment.status;
 
@@ -295,19 +327,22 @@ export class AppointmentsService {
     await this.googleCalendarService.syncPublicAppointment(appointmentId).catch(() => undefined);
   }
 
-  private async getService(serviceId: number, businessId: number): Promise<{ duration_minutes: number; price: number }> {
+  private async getService(serviceId: number, businessId: number): Promise<ServiceSnapshot> {
     const { data, error } = await this.supabase.client
       .from('services')
-      .select('duration_minutes, price')
+      .select('duration_minutes, price, modality, generate_google_meet')
       .eq('id', serviceId)
       .eq('business_id', businessId)
       .single();
 
     if (error || !data) throw new Error(error?.message ?? 'Servicio no encontrado.');
+    const modality = data.modality === 'online' ? 'online' : 'presencial';
 
     return {
       duration_minutes: Number(data.duration_minutes),
       price: Number(data.price ?? 0),
+      modality,
+      generate_google_meet: modality === 'online' && data.generate_google_meet === true,
     };
   }
 
@@ -486,7 +521,14 @@ export class AppointmentsService {
   }
 
   private async syncGoogle(appointmentId: number): Promise<void> {
+    if (!this.subscriptionService.canOperate()) return;
     await this.googleCalendarService.syncAppointment(appointmentId).catch(() => undefined);
+  }
+
+  private assertCanOperate(): void {
+    if (!this.subscriptionService.canOperate()) {
+      throw new Error('Tu suscripcion esta en periodo de gracia. Puedes consultar datos, pero debes renovar para realizar cambios.');
+    }
   }
 
   private mapAppointment(row: any): AppointmentRow {

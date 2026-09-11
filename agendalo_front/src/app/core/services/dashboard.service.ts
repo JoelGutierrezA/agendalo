@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { defer, Observable } from 'rxjs';
 import { BusinessService } from '../../features/settings/services/business.service';
+import { SubscriptionService } from '../../features/subscription/services/subscription.service';
 import { SupabaseService } from './supabase.service';
 
 export interface DashboardSummary {
@@ -25,6 +26,7 @@ export interface DashboardSummary {
 export class DashboardService {
   constructor(
     private businessService: BusinessService,
+    private subscriptionService: SubscriptionService,
     private supabase: SupabaseService
   ) { }
 
@@ -43,6 +45,7 @@ export class DashboardService {
       const weekStart = new Date(now);
       weekStart.setDate(now.getDate() - 6);
       weekStart.setHours(0, 0, 0, 0);
+      const serviceIncomeOnly = this.subscriptionService.usesServiceIncomeOnly();
 
       const [
         monthlyIncome,
@@ -53,13 +56,13 @@ export class DashboardService {
         weeklyAppointments,
         weeklyIncome,
       ] = await Promise.all([
-        this.sumAmount('income_records', business.id, monthStart, nextMonthStart),
+        this.sumIncome(business.id, monthStart, nextMonthStart, serviceIncomeOnly),
         this.sumAmount('expense_records', business.id, monthStart, nextMonthStart),
         this.countAppointments(business.id, todayStart, tomorrowStart),
         this.countPendingAppointments(business.id),
         this.getUpcomingAppointments(business.id, now),
         this.getWeeklyAppointments(business.id, weekStart),
-        this.getWeeklyIncome(business.id, weekStart),
+        this.getWeeklyIncome(business.id, weekStart, serviceIncomeOnly),
       ]);
 
       const chart = this.buildWeeklyChart(weekStart, weeklyAppointments, weeklyIncome);
@@ -86,6 +89,24 @@ export class DashboardService {
       .gte('recorded_at', this.toDateOnly(from))
       .lt('recorded_at', this.toDateOnly(to));
 
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).reduce((sum, row: any) => sum + Number(row.amount ?? 0), 0);
+  }
+
+  private async sumIncome(businessId: number, from: Date, to: Date, serviceIncomeOnly: boolean): Promise<number> {
+    let query = this.supabase.client
+      .from('income_records')
+      .select('amount')
+      .eq('business_id', businessId)
+      .gte('recorded_at', this.toDateOnly(from))
+      .lt('recorded_at', this.toDateOnly(to));
+
+    if (serviceIncomeOnly) {
+      query = query.not('appointment_id', 'is', null);
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
 
     return (data ?? []).reduce((sum, row: any) => sum + Number(row.amount ?? 0), 0);
@@ -162,12 +183,18 @@ export class DashboardService {
     return data ?? [];
   }
 
-  private async getWeeklyIncome(businessId: number, from: Date): Promise<any[]> {
-    const { data, error } = await this.supabase.client
+  private async getWeeklyIncome(businessId: number, from: Date, serviceIncomeOnly: boolean): Promise<any[]> {
+    let query = this.supabase.client
       .from('income_records')
       .select('recorded_at, amount')
       .eq('business_id', businessId)
       .gte('recorded_at', this.toDateOnly(from));
+
+    if (serviceIncomeOnly) {
+      query = query.not('appointment_id', 'is', null);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
     return data ?? [];

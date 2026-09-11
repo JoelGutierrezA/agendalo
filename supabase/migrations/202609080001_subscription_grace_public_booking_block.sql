@@ -1,9 +1,22 @@
--- Agendalo Supabase public booking RPCs
--- Run this after the initial schema.
--- It keeps public booking available without granting broad anon access to clients
--- or appointments tables.
+-- Enforce active subscriptions for public booking while preserving slug/QR URLs.
 
 begin;
+
+create or replace function public.is_business_subscription_active(target_business_id bigint)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.business_subscriptions sub
+    where sub.business_id = target_business_id
+      and sub.status in ('trialing', 'active')
+      and sub.ends_at > now()
+  );
+$$;
 
 create or replace function public.get_public_availability(
   target_slug text,
@@ -28,13 +41,17 @@ begin
   select b.*
   into business_row
   from public.businesses b
-  join public.business_settings bs on bs.business_id = b.id
+  join public.business_settings settings on settings.business_id = b.id
   where b.slug = target_slug
     and b.is_active = true
-    and bs.allow_public_booking = true
+    and settings.allow_public_booking = true
   limit 1;
 
   if business_row.id is null then
+    return slots;
+  end if;
+
+  if not public.is_business_subscription_active(business_row.id) then
     return slots;
   end if;
 
@@ -118,14 +135,18 @@ begin
   select b.*
   into business_row
   from public.businesses b
-  join public.business_settings bs on bs.business_id = b.id
+  join public.business_settings settings on settings.business_id = b.id
   where b.slug = target_slug
     and b.is_active = true
-    and bs.allow_public_booking = true
+    and settings.allow_public_booking = true
   limit 1;
 
   if business_row.id is null then
     raise exception 'Negocio no disponible para reservas publicas.';
+  end if;
+
+  if not public.is_business_subscription_active(business_row.id) then
+    raise exception 'Este negocio no tiene reservas publicas activas en este momento.';
   end if;
 
   select *
@@ -201,8 +222,6 @@ begin
     client_phone,
     scheduled_at,
     duration_minutes,
-    service_modality,
-    generate_google_meet,
     status,
     notes,
     is_from_public
@@ -216,8 +235,6 @@ begin
     target_client_phone,
     scheduled_at_value,
     service_row.duration_minutes,
-    service_row.modality,
-    service_row.generate_google_meet,
     'pending',
     target_notes,
     true
@@ -228,34 +245,8 @@ begin
 end;
 $$;
 
-create or replace function public.get_public_booking_confirmation(target_appointment_id bigint)
-returns table (
-  business_name text,
-  service_name text,
-  client_name text,
-  scheduled_at timestamptz,
-  status text
-)
-language sql
-security definer
-set search_path = public
-as $$
-  select
-    b.name as business_name,
-    coalesce(s.name, 'Servicio') as service_name,
-    a.client_name,
-    a.scheduled_at,
-    a.status
-  from public.appointments a
-  join public.businesses b on b.id = a.business_id
-  left join public.services s on s.id = a.service_id
-  where a.id = target_appointment_id
-    and a.is_from_public = true
-  limit 1;
-$$;
-
+grant execute on function public.is_business_subscription_active(bigint) to anon, authenticated;
 grant execute on function public.get_public_availability(text, bigint, date) to anon, authenticated;
 grant execute on function public.create_public_booking(text, bigint, date, time, text, text, text, text) to anon, authenticated;
-grant execute on function public.get_public_booking_confirmation(bigint) to anon, authenticated;
 
 commit;

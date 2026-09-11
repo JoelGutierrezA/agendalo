@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { GoogleCalendarService } from '../../../settings/services/google-calendar.service';
+import type { ServiceModality } from '../../../../models/auth.models';
 
 interface BusinessPublic {
   id: number;
@@ -21,6 +22,8 @@ interface ServicePublic {
   description: string | null;
   duration_minutes: number;
   price: number;
+  modality: ServiceModality;
+  generate_google_meet: boolean;
 }
 
 @Component({
@@ -58,7 +61,13 @@ interface ServicePublic {
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-border overflow-hidden">
+        @if (!publicBookingActive) {
+          <div class="bg-white rounded-2xl shadow-sm border border-border p-8 text-center">
+            <h2 class="text-xl font-bold text-text-primary">Reservas no disponibles</h2>
+            <p class="mt-2 text-text-secondary">Este negocio no tiene reservas publicas activas en este momento.</p>
+          </div>
+        } @else {
+          <div class="bg-white rounded-2xl shadow-sm border border-border overflow-hidden">
           <div class="flex border-b border-border bg-gray-50/50">
             <div class="flex-1 text-center py-3 text-sm font-medium transition-colors"
                  [class]="step >= 1 ? 'text-primary' : 'text-slate-500'"
@@ -246,6 +255,7 @@ interface ServicePublic {
             }
           </div>
         </div>
+        }
       }
     </div>
   `,
@@ -262,6 +272,7 @@ export class BookingPageComponent implements OnInit {
   business: BusinessPublic | null = null;
   loadingBusiness = true;
   errorBusiness = false;
+  publicBookingActive = true;
 
   services: ServicePublic[] = [];
   loadingServices = false;
@@ -324,8 +335,11 @@ export class BookingPageComponent implements OnInit {
     }
 
     this.business = data;
+    this.publicBookingActive = await this.hasActivePublicBooking(data.id);
     this.loadingBusiness = false;
-    await this.loadServices();
+    if (this.publicBookingActive) {
+      await this.loadServices();
+    }
   }
 
   async loadServices(): Promise<void> {
@@ -334,7 +348,7 @@ export class BookingPageComponent implements OnInit {
     this.loadingServices = true;
     const { data, error } = await this.supabase.client
       .from('services')
-      .select('id, name, description, duration_minutes, price')
+      .select('id, name, description, duration_minutes, price, modality, generate_google_meet')
       .eq('business_id', this.business.id)
       .eq('is_active', true)
       .order('name');
@@ -344,6 +358,8 @@ export class BookingPageComponent implements OnInit {
         ...service,
         duration_minutes: Number(service.duration_minutes),
         price: Number(service.price ?? 0),
+        modality: service.modality === 'online' ? 'online' : 'presencial',
+        generate_google_meet: service.modality === 'online' && service.generate_google_meet === true,
       }));
     }
 
@@ -362,7 +378,7 @@ export class BookingPageComponent implements OnInit {
   }
 
   async loadAvailability(): Promise<void> {
-    if (!this.selectedDate || !this.selectedService) return;
+    if (!this.publicBookingActive || !this.selectedDate || !this.selectedService) return;
 
     this.selectedTime = '';
     this.loadingAvailability = true;
@@ -383,6 +399,11 @@ export class BookingPageComponent implements OnInit {
   }
 
   async submitBooking(): Promise<void> {
+    if (!this.publicBookingActive) {
+      this.bookingError = 'Este negocio no tiene reservas publicas activas en este momento.';
+      return;
+    }
+
     if (this.bookingForm.invalid || !this.selectedService) {
       this.bookingForm.markAllAsTouched();
       return;
@@ -422,6 +443,18 @@ export class BookingPageComponent implements OnInit {
     await this.supabase.client.functions.invoke('notify-appointment', {
       body: { appointment_id: appointmentId },
     }).catch(() => undefined);
+  }
+
+  private async hasActivePublicBooking(businessId: number): Promise<boolean> {
+    const { data, error } = await this.supabase.client.rpc('is_business_subscription_active', {
+      target_business_id: businessId,
+    });
+
+    if (error) {
+      return false;
+    }
+
+    return data === true;
   }
 
   formatDate(dateStr: string): string {

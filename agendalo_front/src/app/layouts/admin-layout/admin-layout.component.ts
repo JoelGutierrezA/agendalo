@@ -1,14 +1,23 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, signal } from '@angular/core';
-import { Router, RouterModule } from '@angular/router';
+import { Component, OnInit, computed, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterModule } from '@angular/router';
+import { filter } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BusinessService } from '../../features/settings/services/business.service';
+import {
+  BusinessSubscription,
+  ExpiryWarningPresentation,
+  FeatureKey,
+  GracePeriodPresentation,
+  SubscriptionService,
+} from '../../features/subscription/services/subscription.service';
 
 interface NavItem {
   label: string;
   route: string;
   iconPath?: string;
   icon?: string;
+  feature?: FeatureKey;
 }
 
 @Component({
@@ -163,6 +172,7 @@ interface NavItem {
           </button>
           <div class="hidden lg:block" aria-hidden="true"></div>
 
+          @if (hasPublicPage()) {
           <div class="hidden sm:flex items-center gap-2">
             <a
               [href]="publicUrl()"
@@ -190,12 +200,95 @@ interface NavItem {
               <span>Generar QR</span>
             </button>
           </div>
+          }
         </header>
 
         <main class="flex-1 overflow-y-auto p-4 sm:p-6">
+          @if (graceNotice(); as notice) {
+            <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="font-bold">{{ notice.title }}</p>
+                  <p class="mt-1">{{ notice.message }}</p>
+                </div>
+                <button type="button" class="btn-secondary justify-center bg-white" (click)="goToSubscriptionFromWarning()">
+                  {{ notice.cta }}
+                </button>
+              </div>
+            </div>
+          }
           <router-outlet />
         </main>
       </div>
+
+      @if (setupModalVisible()) {
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true">
+          <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-primary-light text-primary">
+              <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 21h18" />
+                <path d="M5 21V7l8-4v18" />
+                <path d="M19 21V11l-6-4" />
+                <path d="M9 9h1" />
+                <path d="M9 13h1" />
+                <path d="M9 17h1" />
+              </svg>
+            </div>
+            <h2 class="text-xl font-bold text-text-primary">Antes de comenzar, configura tu negocio</h2>
+            <p class="mt-3 text-sm leading-6 text-text-secondary">
+              Necesitamos algunos datos basicos para preparar tu espacio en Skedia y generar tu enlace de reservas.
+            </p>
+            <div class="mt-6 flex flex-col gap-3">
+              <button type="button" class="btn-primary w-full justify-center py-2.5" (click)="goToBusinessSetup()">
+                Configurar mi negocio
+              </button>
+              <button type="button" class="btn-secondary w-full justify-center py-2.5" (click)="doLogout()">
+                Cerrar sesion
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (expiryWarning(); as warning) {
+        <div class="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            class="absolute inset-0"
+            aria-label="Cerrar aviso de suscripcion"
+            (click)="closeExpiryWarning()"
+          ></button>
+
+          <div class="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div
+              class="mb-5 flex h-12 w-12 items-center justify-center rounded-full"
+              [ngClass]="warning.tone === 'urgent' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'"
+            >
+              <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 6v6l4 2" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </div>
+
+            <h2 class="text-xl font-bold text-text-primary">{{ warning.title }}</h2>
+            <p class="mt-3 text-sm leading-6 text-text-secondary">{{ warning.message }}</p>
+            <p class="mt-3 rounded-lg border px-4 py-3 text-sm leading-6"
+              [ngClass]="warning.tone === 'urgent' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'"
+            >
+              {{ warning.impact }}
+            </p>
+
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" class="btn-secondary justify-center" (click)="closeExpiryWarning()">
+                Cerrar
+              </button>
+              <button type="button" class="btn-primary justify-center" (click)="goToSubscriptionFromWarning()">
+                {{ warning.cta }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
 
       @if (qrModalOpen()) {
         <div class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4">
@@ -238,10 +331,15 @@ interface NavItem {
     </div>
   `,
 })
-export class AdminLayoutComponent {
+export class AdminLayoutComponent implements OnInit {
   mobileMenuOpen = signal(false);
   qrModalOpen = signal(false);
   copyLabel = signal('Copiar enlace');
+  currentUrl = signal('');
+  expiryWarning = signal<ExpiryWarningPresentation | null>(null);
+  graceNotice = computed<GracePeriodPresentation | null>(() => this.subscriptionService.gracePeriodPresentation());
+  private businessSetupUrl = '/app/configuracion/negocio';
+  private expiryWarningShownInMemory = false;
 
   navItems = computed<NavItem[]>(() => {
     const role = this.authService.currentUser()?.role;
@@ -249,21 +347,28 @@ export class AdminLayoutComponent {
     if (role === 'admin_platform') {
       return [
         { label: 'Dashboard Admin', iconPath: 'assets/Interfaz/Dashboard.png', route: '/admin-plataforma' },
-        { label: 'Negocios', iconPath: 'assets/Interfaz/Servicios.png', route: '/admin-plataforma/negocios' },
         { label: 'Usuarios', iconPath: 'assets/Interfaz/Clientes.png', route: '/admin-plataforma/usuarios' },
         { label: 'Configuración', iconPath: 'assets/Interfaz/Configuraci%C3%B3n.png', route: '/app/configuracion' },
       ];
     }
 
-    return [
+    if (this.subscriptionService.isExpiredEffective()) {
+      return [
+        { label: 'Suscripcion', iconPath: 'assets/Interfaz/Finanzas.png', route: '/app/suscripcion' },
+      ];
+    }
+
+    const items: NavItem[] = [
       { label: 'Dashboard', iconPath: 'assets/Interfaz/Dashboard.png', route: '/app/dashboard' },
       { label: 'Agenda', iconPath: 'assets/Interfaz/Agenda.png', route: '/app/agenda' },
       { label: 'Clientes', iconPath: 'assets/Interfaz/Clientes.png', route: '/app/clientes' },
       { label: 'Servicios', iconPath: 'assets/Interfaz/Servicios.png', route: '/app/servicios' },
-      { label: 'Insumos', iconPath: 'assets/Interfaz/Insumos.png', route: '/app/insumos' },
+      { label: 'Insumos', iconPath: 'assets/Interfaz/Insumos.png', route: '/app/insumos', feature: 'supplies' },
       { label: 'Suscripcion', iconPath: 'assets/Interfaz/Finanzas.png', route: '/app/suscripcion' },
       { label: 'Configuración', iconPath: 'assets/Interfaz/Configuraci%C3%B3n.png', route: '/app/configuracion' },
     ];
+
+    return items.filter(item => !item.feature || this.subscriptionService.hasFeature(item.feature));
   });
 
   userName = computed(() => this.authService.currentUser()?.name ?? '');
@@ -276,7 +381,7 @@ export class AdminLayoutComponent {
   businessName = computed(() => {
     const user = this.authService.currentUser();
     if (user?.role === 'admin_platform') return 'Administración';
-    return this.businessService.currentBusiness()?.name ?? 'Mi Negocio';
+    return this.businessService.currentBusiness()?.name ?? user?.name ?? 'Mi cuenta';
   });
   publicPath = computed(() => {
     const slug = this.businessService.currentBusiness()?.slug;
@@ -286,16 +391,40 @@ export class AdminLayoutComponent {
     if (this.publicPath() === '#') return '#';
     return `${window.location.origin}${this.publicPath()}`;
   });
+  hasPublicPage = computed(() => this.publicPath() !== '#');
   qrImageUrl = computed(() => {
     const encodedUrl = encodeURIComponent(this.publicUrl());
     return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=18&data=${encodedUrl}`;
+  });
+  needsBusinessSetup = computed(() => {
+    const user = this.authService.currentUser();
+    return !!user && user.role !== 'admin_platform' && !this.businessService.currentBusiness();
+  });
+  setupModalVisible = computed(() => {
+    const currentUrl = this.currentUrl().split('?')[0];
+    return this.needsBusinessSetup() && !currentUrl.startsWith(this.businessSetupUrl);
   });
 
   constructor(
     private authService: AuthService,
     private businessService: BusinessService,
+    private subscriptionService: SubscriptionService,
     private router: Router
   ) {}
+
+  ngOnInit(): void {
+    this.currentUrl.set(this.router.url);
+    this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe(event => this.currentUrl.set(event.urlAfterRedirects));
+
+    if (this.authService.currentUser()?.role !== 'admin_platform') {
+      this.subscriptionService.ensureLoaded().subscribe({
+        next: subscription => this.showExpiryWarningOnce(subscription),
+        error: () => undefined,
+      });
+    }
+  }
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update(open => !open);
@@ -327,6 +456,21 @@ export class AdminLayoutComponent {
     this.qrModalOpen.set(false);
   }
 
+  closeExpiryWarning(): void {
+    this.expiryWarning.set(null);
+  }
+
+  goToSubscriptionFromWarning(): void {
+    this.closeExpiryWarning();
+    this.closeMobileMenu();
+    this.router.navigate(['/app/suscripcion']);
+  }
+
+  goToBusinessSetup(): void {
+    this.closeMobileMenu();
+    this.router.navigate([this.businessSetupUrl]);
+  }
+
   doLogout(): void {
     this.closeMobileMenu();
     this.authService.logout().subscribe({
@@ -335,5 +479,50 @@ export class AdminLayoutComponent {
         this.router.navigate(['/login']);
       }
     });
+  }
+
+  private showExpiryWarningOnce(subscription: BusinessSubscription | null): void {
+    const user = this.authService.currentUser();
+    if (user?.role === 'admin_platform') return;
+    if (!subscription) return;
+
+    const warning = this.subscriptionService.expiryWarningPresentation(subscription);
+    if (!warning) return;
+
+    const key = this.expiryWarningSessionKey(subscription);
+    if (this.hasSeenExpiryWarning(key)) return;
+
+    this.markExpiryWarningSeen(key);
+    this.expiryWarning.set(warning);
+  }
+
+  private expiryWarningSessionKey(subscription: BusinessSubscription): string {
+    const userId = this.authService.currentUser()?.id ?? 'user';
+    const businessId = this.businessService.currentBusiness()?.id ?? 'business';
+    return `skedia-expiry-warning:${userId}:${businessId}:${subscription.status}:${subscription.ends_at}`;
+  }
+
+  private hasSeenExpiryWarning(key: string): boolean {
+    if (typeof sessionStorage === 'undefined') {
+      return this.expiryWarningShownInMemory;
+    }
+
+    try {
+      return sessionStorage.getItem(key) === '1';
+    } catch {
+      return this.expiryWarningShownInMemory;
+    }
+  }
+
+  private markExpiryWarningSeen(key: string): void {
+    this.expiryWarningShownInMemory = true;
+
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem(key, '1');
+      } catch {
+        // In-memory state still prevents repeats while this layout is alive.
+      }
+    }
   }
 }

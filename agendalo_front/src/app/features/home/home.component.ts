@@ -84,7 +84,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
             </a>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             @for (plan of plans; track plan.name) {
               <article
                 class="relative overflow-hidden border rounded-lg p-5 flex flex-col transition-all duration-200 hover:-translate-y-1"
@@ -164,37 +164,26 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
 export class HomeComponent {
   plans = [
     {
-      name: 'Básico',
-      description: 'Para negocios pequeños que necesitan ordenar reservas y clientes.',
+      name: 'Agenda',
+      description: 'Para profesionales que necesitan ordenar reservas, clientes y servicios.',
       price: '$9.990',
       period: 'CLP / mes',
-      cta: 'Elegir Básico',
+      cta: 'Elegir Agenda',
       ctaLink: '/registro',
       tone: 'basic',
       recommended: false,
-      features: ['1 negocio', 'Agenda y reservas', 'Clientes y servicios', 'Página pública de reservas'],
-    },
-    {
-      name: 'Medio',
-      description: 'Para negocios con más movimiento que necesitan mayor control de su operación.',
-      price: '$19.990',
-      period: 'CLP / mes',
-      cta: 'Elegir Medio',
-      ctaLink: '/registro',
-      tone: 'accent',
-      recommended: true,
-      features: ['Todo lo del plan Básico', 'Ingresos y egresos', 'Balance del negocio', 'Indicadores y seguimiento'],
+      features: ['Agenda y reservas', 'Clientes y servicios', 'Google Calendar', 'Página pública de reservas', 'Ingresos simples'],
     },
     {
       name: 'Premium',
-      description: 'Para negocios que necesitan mayor integración y control.',
-      price: '$34.990',
+      description: 'Para negocios que necesitan balance, egresos, insumos e inventario.',
+      price: '$19.990',
       period: 'CLP / mes',
       cta: 'Elegir Premium',
       ctaLink: '/registro',
       tone: 'premium',
-      recommended: false,
-      features: ['Todo lo del plan Medio', 'Sincronización con Google Calendar', 'Soporte prioritario'],
+      recommended: true,
+      features: ['Todo lo del plan Agenda', 'Balance completo', 'Ingresos manuales', 'Egresos', 'Insumos e inventario'],
     },
   ];
 }

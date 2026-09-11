@@ -1,93 +1,86 @@
--- Agendalo Supabase public booking RPCs
--- Run this after the initial schema.
--- It keeps public booking available without granting broad anon access to clients
--- or appointments tables.
+-- Add service modality and Google Meet snapshot fields without enabling Meet generation yet.
 
 begin;
 
-create or replace function public.get_public_availability(
-  target_slug text,
-  target_service_id bigint,
-  target_date date
-)
-returns text[]
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  business_row public.businesses%rowtype;
-  service_row public.services%rowtype;
-  opening_row public.opening_hours%rowtype;
-  slot_start timestamptz;
-  slot_end timestamptz;
-  day_start timestamptz;
-  day_end timestamptz;
-  slots text[] := '{}';
+alter table public.services
+  add column if not exists modality text not null default 'presencial',
+  add column if not exists generate_google_meet boolean not null default false;
+
+update public.services
+set modality = coalesce(modality, 'presencial'),
+    generate_google_meet = coalesce(generate_google_meet, false);
+
+do $$
 begin
-  select b.*
-  into business_row
-  from public.businesses b
-  join public.business_settings bs on bs.business_id = b.id
-  where b.slug = target_slug
-    and b.is_active = true
-    and bs.allow_public_booking = true
-  limit 1;
-
-  if business_row.id is null then
-    return slots;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'services_modality_check'
+      and conrelid = 'public.services'::regclass
+  ) then
+    alter table public.services
+      add constraint services_modality_check
+      check (modality in ('presencial', 'online'));
   end if;
 
-  select *
-  into service_row
-  from public.services
-  where id = target_service_id
-    and business_id = business_row.id
-    and is_active = true
-  limit 1;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'services_meet_requires_online_check'
+      and conrelid = 'public.services'::regclass
+  ) then
+    alter table public.services
+      add constraint services_meet_requires_online_check
+      check (not (modality = 'presencial' and generate_google_meet = true));
+  end if;
+end;
+$$;
 
-  if service_row.id is null then
-    return slots;
+alter table public.appointments
+  add column if not exists service_modality text,
+  add column if not exists generate_google_meet boolean not null default false,
+  add column if not exists google_meet_url text,
+  add column if not exists google_conference_id text,
+  add column if not exists google_conference_status text not null default 'none';
+
+update public.appointments
+set generate_google_meet = coalesce(generate_google_meet, false),
+    google_conference_status = coalesce(google_conference_status, 'none');
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'appointments_service_modality_check'
+      and conrelid = 'public.appointments'::regclass
+  ) then
+    alter table public.appointments
+      add constraint appointments_service_modality_check
+      check (service_modality is null or service_modality in ('presencial', 'online'));
   end if;
 
-  select *
-  into opening_row
-  from public.opening_hours
-  where business_id = business_row.id
-    and day_of_week = extract(dow from target_date)::smallint
-    and is_open = true
-  limit 1;
-
-  if opening_row.id is null or opening_row.open_time is null or opening_row.close_time is null then
-    return slots;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'appointments_google_conference_status_check'
+      and conrelid = 'public.appointments'::regclass
+  ) then
+    alter table public.appointments
+      add constraint appointments_google_conference_status_check
+      check (google_conference_status in ('none', 'pending', 'created', 'failed'));
   end if;
 
-  slot_start := (target_date + opening_row.open_time) at time zone 'America/Santiago';
-  day_start := target_date::timestamp at time zone 'America/Santiago';
-  day_end := (target_date::timestamp + interval '1 day') at time zone 'America/Santiago';
-
-  while (slot_start + make_interval(mins => service_row.duration_minutes)) <= ((target_date + opening_row.close_time) at time zone 'America/Santiago') loop
-    slot_end := slot_start + make_interval(mins => service_row.duration_minutes);
-
-    if slot_start > now()
-      and not exists (
-        select 1
-        from public.appointments a
-        where a.business_id = business_row.id
-          and a.status in ('pending', 'confirmed')
-          and a.scheduled_at >= day_start
-          and a.scheduled_at < day_end
-          and a.scheduled_at < slot_end
-          and (a.scheduled_at + make_interval(mins => a.duration_minutes)) > slot_start
-      )
-    then
-      slots := array_append(slots, to_char(slot_start at time zone 'America/Santiago', 'HH24:MI'));
-    end if;
-
-    slot_start := slot_start + interval '30 minutes';
-  end loop;
-
-  return slots;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'appointments_meet_requires_online_check'
+      and conrelid = 'public.appointments'::regclass
+  ) then
+    alter table public.appointments
+      add constraint appointments_meet_requires_online_check
+      check (not (service_modality = 'presencial' and generate_google_meet = true));
+  end if;
 end;
 $$;
 
@@ -118,14 +111,18 @@ begin
   select b.*
   into business_row
   from public.businesses b
-  join public.business_settings bs on bs.business_id = b.id
+  join public.business_settings settings on settings.business_id = b.id
   where b.slug = target_slug
     and b.is_active = true
-    and bs.allow_public_booking = true
+    and settings.allow_public_booking = true
   limit 1;
 
   if business_row.id is null then
     raise exception 'Negocio no disponible para reservas publicas.';
+  end if;
+
+  if not public.is_business_subscription_active(business_row.id) then
+    raise exception 'Este negocio no tiene reservas publicas activas en este momento.';
   end if;
 
   select *
@@ -228,34 +225,6 @@ begin
 end;
 $$;
 
-create or replace function public.get_public_booking_confirmation(target_appointment_id bigint)
-returns table (
-  business_name text,
-  service_name text,
-  client_name text,
-  scheduled_at timestamptz,
-  status text
-)
-language sql
-security definer
-set search_path = public
-as $$
-  select
-    b.name as business_name,
-    coalesce(s.name, 'Servicio') as service_name,
-    a.client_name,
-    a.scheduled_at,
-    a.status
-  from public.appointments a
-  join public.businesses b on b.id = a.business_id
-  left join public.services s on s.id = a.service_id
-  where a.id = target_appointment_id
-    and a.is_from_public = true
-  limit 1;
-$$;
-
-grant execute on function public.get_public_availability(text, bigint, date) to anon, authenticated;
 grant execute on function public.create_public_booking(text, bigint, date, time, text, text, text, text) to anon, authenticated;
-grant execute on function public.get_public_booking_confirmation(bigint) to anon, authenticated;
 
 commit;

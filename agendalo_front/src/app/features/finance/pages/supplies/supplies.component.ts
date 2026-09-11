@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { SupplyService, SupplyTransaction, Supply } from '../../services/supply.service';
 import Swal from 'sweetalert2';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 @Component({
   selector: 'app-supplies',
@@ -21,7 +22,11 @@ export class SuppliesComponent implements OnInit {
   purchaseForm: FormGroup;
   catalogForm: FormGroup;
 
-  constructor(private supplyService: SupplyService, private fb: FormBuilder) {
+  constructor(
+    private supplyService: SupplyService,
+    private fb: FormBuilder,
+    private subscriptionService: SubscriptionService
+  ) {
     this.purchaseForm = this.fb.group({
       supply_id: ['', Validators.required],
       quantity: [1, [Validators.required, Validators.min(0.01)]],
@@ -61,6 +66,8 @@ export class SuppliesComponent implements OnInit {
   }
 
   openPurchaseModal() {
+    if (!this.assertOperationAllowed()) return;
+
     this.purchaseForm.reset({
       quantity: 1,
       unit_cost: 0,
@@ -70,11 +77,15 @@ export class SuppliesComponent implements OnInit {
   }
 
   openCatalogModal() {
+    if (!this.assertOperationAllowed()) return;
+
     this.catalogForm.reset();
     this.showCatalogModal = true;
   }
 
   savePurchase() {
+    if (!this.assertOperationAllowed()) return;
+
     if (this.purchaseForm.invalid) {
       this.purchaseForm.markAllAsTouched();
       return;
@@ -99,6 +110,8 @@ export class SuppliesComponent implements OnInit {
   }
 
   saveCatalogItem() {
+    if (!this.assertOperationAllowed()) return;
+
     if (this.catalogForm.invalid) {
       this.catalogForm.markAllAsTouched();
       return;
@@ -119,6 +132,8 @@ export class SuppliesComponent implements OnInit {
   }
 
   deletePurchase(id: number) {
+    if (!this.assertOperationAllowed()) return;
+
     Swal.fire({
       title: '¿Revertir esta compra?',
       text: "Esto devolverá el dinero descontado al balance de tus finanzas.",
@@ -138,5 +153,16 @@ export class SuppliesComponent implements OnInit {
         });
       }
     });
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
+  }
+
+  private assertOperationAllowed(): boolean {
+    if (this.subscriptionService.canOperate()) return true;
+
+    Swal.fire('Solo lectura', 'Tu suscripcion esta en periodo de gracia. Puedes consultar insumos, pero debes renovar para realizar cambios.', 'warning');
+    return false;
   }
 }

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { AppointmentsService, CalendarEvent } from '../../services/appointments.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 type CalendarView = 'year' | 'month' | 'week';
 
@@ -154,15 +155,26 @@ interface CalendarMonth {
                             <p class="opacity-90 truncate text-[10px] mt-0.5">{{ event.extendedProps.service_name }} · Solo lectura</p>
                           </div>
                         } @else {
-                          <a
-                            class="rounded-lg p-2 text-xs text-white shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
-                            [style.backgroundColor]="event.backgroundColor"
-                            [title]="event.extendedProps.service_name + ' - ' + event.extendedProps.status"
-                            [routerLink]="['/app/citas', event.id, 'editar']"
-                          >
-                            <p class="font-semibold truncate">{{ formatTime(event.start) }} - {{ event.extendedProps.client_name }}</p>
-                            <p class="opacity-90 truncate text-[10px] mt-0.5">{{ event.extendedProps.service_name }}</p>
-                          </a>
+                          @if (canOperate()) {
+                            <a
+                              class="rounded-lg p-2 text-xs text-white shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                              [style.backgroundColor]="event.backgroundColor"
+                              [title]="event.extendedProps.service_name + ' - ' + event.extendedProps.status"
+                              [routerLink]="['/app/citas', event.id, 'editar']"
+                            >
+                              <p class="font-semibold truncate">{{ formatTime(event.start) }} - {{ event.extendedProps.client_name }}</p>
+                              <p class="opacity-90 truncate text-[10px] mt-0.5">{{ event.extendedProps.service_name }}</p>
+                            </a>
+                          } @else {
+                            <div
+                              class="rounded-lg p-2 text-xs text-white shadow-sm"
+                              [style.backgroundColor]="event.backgroundColor"
+                              [title]="event.extendedProps.service_name + ' - ' + event.extendedProps.status"
+                            >
+                              <p class="font-semibold truncate">{{ formatTime(event.start) }} - {{ event.extendedProps.client_name }}</p>
+                              <p class="opacity-90 truncate text-[10px] mt-0.5">{{ event.extendedProps.service_name }}</p>
+                            </div>
+                          }
                         }
                       }
 
@@ -173,7 +185,7 @@ interface CalendarMonth {
                       }
                     </div>
 
-                    @if (getEventsForDay(day.dateStr).length === 0) {
+                    @if (getEventsForDay(day.dateStr).length === 0 && canOperate()) {
                       <a
                         routerLink="/app/citas/nueva"
                         class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
@@ -218,7 +230,10 @@ export class CalendarComponent implements OnInit {
     return titles[this.viewMode];
   }
 
-  constructor(private appointmentsService: AppointmentsService) {}
+  constructor(
+    private appointmentsService: AppointmentsService,
+    private subscriptionService: SubscriptionService
+  ) {}
 
   ngOnInit(): void {
     void this.refreshView();
@@ -227,6 +242,10 @@ export class CalendarComponent implements OnInit {
   setView(view: CalendarView): void {
     this.viewMode = view;
     void this.refreshView();
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
   }
 
   previous(): void {

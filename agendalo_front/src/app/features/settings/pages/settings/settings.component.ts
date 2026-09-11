@@ -7,6 +7,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { BusinessSettings } from '../../../../models/auth.models';
 import { BusinessService } from '../../services/business.service';
 import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/google-calendar.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 /** Página de configuración del negocio con tabs */
 @Component({
@@ -22,7 +23,7 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
         </div>
         <button
           class="btn-primary w-full justify-center sm:w-auto"
-          [disabled]="loading || logoUploading || saveSuccess"
+          [disabled]="loading || logoUploading || saveSuccess || !canOperate()"
           (click)="onSave()"
         >
           @if (loading) { Guardando... }
@@ -73,11 +74,11 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
                   <p class="text-xs text-text-secondary mb-3">Usa una imagen cuadrada en PNG, JPG o WebP de máximo 1 MB. Se mostrará en tu página de reservas.</p>
                   <div class="flex flex-wrap gap-2">
                     <input #logoInput type="file" class="hidden" accept="image/png,image/jpeg,image/webp" (change)="onLogoSelected($event)" />
-                    <button type="button" class="btn-secondary flex-1 justify-center sm:flex-none" (click)="logoInput.click()" [disabled]="logoUploading">
+                    <button type="button" class="btn-secondary flex-1 justify-center sm:flex-none" (click)="logoInput.click()" [disabled]="logoUploading || !canOperate()">
                       {{ logoUploading ? 'Subiendo...' : 'Subir imagen' }}
                     </button>
                     @if (logoPreviewUrl) {
-                      <button type="button" class="btn-secondary flex-1 justify-center sm:flex-none" (click)="removeLogo()" [disabled]="logoUploading">
+                      <button type="button" class="btn-secondary flex-1 justify-center sm:flex-none" (click)="removeLogo()" [disabled]="logoUploading || !canOperate()">
                         Quitar imagen
                       </button>
                     }
@@ -138,19 +139,19 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
             <div class="grid grid-cols-1 gap-2 py-3 border-b border-border last:border-0 sm:grid-cols-[7rem_1fr] sm:gap-4">
               <div class="sm:w-28 flex-shrink-0">
                 <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" [(ngModel)]="day.open" [ngModelOptions]="{standalone: true}" class="w-4 h-4 accent-primary" />
+                  <input type="checkbox" [(ngModel)]="day.open" [ngModelOptions]="{standalone: true}" class="w-4 h-4 accent-primary" [disabled]="!canOperate()" />
                   <span class="text-sm font-medium">{{ day.name }}</span>
                 </label>
               </div>
               @if (day.open) {
                 <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:gap-3">
-                  <select class="form-input w-full sm:w-32" [(ngModel)]="day.open_time" [ngModelOptions]="{standalone: true}">
+                  <select class="form-input w-full sm:w-32" [(ngModel)]="day.open_time" [ngModelOptions]="{standalone: true}" [disabled]="!canOperate()">
                     @for (time of timeOptions; track time) {
                       <option [value]="time">{{ time }}</option>
                     }
                   </select>
                   <span class="text-text-secondary text-sm text-center">hasta</span>
-                  <select class="form-input w-full sm:w-32" [(ngModel)]="day.close_time" [ngModelOptions]="{standalone: true}">
+                  <select class="form-input w-full sm:w-32" [(ngModel)]="day.close_time" [ngModelOptions]="{standalone: true}" [disabled]="!canOperate()">
                     @for (time of timeOptions; track time) {
                       <option [value]="time">{{ time }}</option>
                     }
@@ -219,11 +220,11 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
 
             <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               @if (googleStatus?.connected) {
-                <button class="btn-secondary justify-center" (click)="disconnectGoogle()" [disabled]="calendarLoading">
+                <button class="btn-secondary justify-center" (click)="disconnectGoogle()" [disabled]="calendarLoading || !canOperate()">
                   Desconectar Google Calendar
                 </button>
               } @else {
-                <button class="btn-primary justify-center" (click)="connectGoogle()" [disabled]="calendarLoading">
+                <button class="btn-primary justify-center" (click)="connectGoogle()" [disabled]="calendarLoading || !canOperate()">
                   Conectar con Google Calendar
                 </button>
               }
@@ -236,6 +237,7 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '../../services/goog
                   class="w-4 h-4 mt-0.5 accent-primary"
                   [(ngModel)]="settingsData.send_client_calendar_invite"
                   [ngModelOptions]="{ standalone: true }"
+                  [disabled]="!canOperate()"
                 />
                 <span>
                   <span class="block text-sm font-medium text-text-primary">Enviar invitación al cliente (ON/OFF)</span>
@@ -308,7 +310,8 @@ export class SettingsComponent implements OnInit {
     private authService: AuthService,
     private route: ActivatedRoute,
     private googleCalendarService: GoogleCalendarService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private subscriptionService: SubscriptionService
   ) {
     this.generateTimeOptions();
     this.businessForm = this.fb.group({
@@ -337,6 +340,11 @@ export class SettingsComponent implements OnInit {
     const queryTab = this.route.snapshot.queryParamMap.get('tab');
     if (queryTab && this.tabs.some(t => t.id === queryTab)) {
       this.activeTab = queryTab;
+    }
+
+    if (!this.isPlatformAdmin() && !this.businessService.hasBusiness()) {
+      this.dataLoading = false;
+      return;
     }
 
     this.loadBusinessData();
@@ -386,6 +394,8 @@ export class SettingsComponent implements OnInit {
   }
 
   connectGoogle(): void {
+    if (!this.assertOperationAllowed()) return;
+
     this.calendarLoading = true;
     this.googleCalendarService.getAuthUrl().subscribe({
       next: (authUrl) => {
@@ -398,6 +408,8 @@ export class SettingsComponent implements OnInit {
   }
 
   disconnectGoogle(): void {
+    if (!this.assertOperationAllowed()) return;
+
     this.calendarLoading = true;
     this.googleCalendarService.disconnect().subscribe({
       next: () => {
@@ -434,6 +446,8 @@ export class SettingsComponent implements OnInit {
   }
 
   onLogoSelected(event: Event): void {
+    if (!this.assertOperationAllowed()) return;
+
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
@@ -473,6 +487,8 @@ export class SettingsComponent implements OnInit {
   }
 
   removeLogo(): void {
+    if (!this.assertOperationAllowed()) return;
+
     this.logoPreviewUrl = '';
     this.businessForm.patchValue({ logo_url: '' });
     const currentBusiness = this.businessService.currentBusiness();
@@ -506,6 +522,8 @@ export class SettingsComponent implements OnInit {
   }
 
   onSave(): void {
+    if (!this.assertOperationAllowed()) return;
+
     if (this.activeTab === 'business') {
       this.saveBusinessInfo();
     } else if (this.activeTab === 'hours') {
@@ -592,6 +610,18 @@ export class SettingsComponent implements OnInit {
 
   private isPlatformAdmin(): boolean {
     return this.authService.currentUser()?.role === 'admin_platform';
+  }
+
+  canOperate(): boolean {
+    return this.isPlatformAdmin() || this.subscriptionService.canOperate();
+  }
+
+  private assertOperationAllowed(): boolean {
+    if (this.canOperate()) return true;
+
+    this.saveError = 'Tu suscripcion esta en periodo de gracia. Puedes consultar configuracion, pero debes renovar para realizar cambios.';
+    this.toastService.error(this.saveError);
+    return false;
   }
 }
 

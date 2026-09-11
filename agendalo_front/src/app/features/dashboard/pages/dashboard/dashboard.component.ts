@@ -2,11 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
+import { combineLatest, startWith } from 'rxjs';
 import { DashboardService, DashboardSummary } from '../../../../core/services/dashboard.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { BusinessService } from '../../../settings/services/business.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { AppointmentFilters, AppointmentRow, AppointmentsService } from '../../../appointments/services/appointments.service';
+import { FeatureKey, SubscriptionService, TrialPresentation } from '../../../subscription/services/subscription.service';
 
 interface ExpenseCategory {
   id: number;
@@ -19,6 +21,13 @@ interface ServiceOption {
   name: string;
   duration_minutes: number;
   price: number;
+}
+
+interface OpeningHour {
+  day_of_week: number;
+  is_open: boolean;
+  open_time: string | null;
+  close_time: string | null;
 }
 
 @Component({
@@ -52,12 +61,64 @@ interface ServiceOption {
             <h1 class="page-title">Dashboard</h1>
           </div>
         </div>
+
+        @if (hasFeature('manual_income') || hasFeature('expenses')) {
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
+            @if (hasFeature('manual_income')) {
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                [disabled]="!canOperate()"
+                (click)="openTransactionModal('Ingresos')"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"></path>
+                  <path d="M5 12h14"></path>
+                </svg>
+                <span>Ingreso</span>
+              </button>
+            }
+            @if (hasFeature('expenses')) {
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                [disabled]="!canOperate()"
+                (click)="openTransactionModal('Egresos')"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14"></path>
+                </svg>
+                <span>Egreso</span>
+              </button>
+            }
+          </div>
+        }
       </div>
+
+      @if (trialPresentation(); as trial) {
+        <div
+          class="flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          [ngClass]="trialNoticeClass(trial.tone)"
+        >
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+            <span>Prueba gratuita</span>
+            <span class="hidden sm:inline">·</span>
+            <span>{{ trial.compactDaysText }}</span>
+          </div>
+          <a
+            routerLink="/app/suscripcion"
+            fragment="planes"
+            class="inline-flex h-9 items-center justify-center rounded-lg border border-current px-3 text-sm font-bold transition-colors hover:bg-white/70"
+          >
+            Ver planes
+          </a>
+        </div>
+      }
 
       <div class="grid grid-cols-1 lg:grid-cols-[minmax(260px,360px)_1fr] gap-6">
         <!-- KPI Cards -->
         <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-1">
-          @for (kpi of kpis; track kpi.label) {
+          @for (kpi of visibleKpis(); track kpi.label) {
           <div class="card p-3 sm:p-5 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
             <div class="flex items-start justify-between">
               <div>
@@ -159,7 +220,8 @@ interface ServiceOption {
           @if (appointmentsLoading) {
             <div class="space-y-3">
               @for (i of [1,2,3,4]; track i) {
-                <div class="grid grid-cols-7 gap-3">
+                <div class="grid grid-cols-8 gap-3">
+                  <div class="skeleton h-4 rounded col-span-1"></div>
                   <div class="skeleton h-4 rounded col-span-1"></div>
                   <div class="skeleton h-4 rounded col-span-1"></div>
                   <div class="skeleton h-4 rounded col-span-1"></div>
@@ -177,12 +239,13 @@ interface ServiceOption {
             </div>
           } @else {
             <div class="overflow-x-auto">
-              <table class="w-full min-w-[760px] text-left text-sm">
+              <table class="w-full min-w-[900px] text-left text-sm">
                 <thead class="border-b border-border bg-gray-50/70 text-xs font-bold uppercase tracking-wider text-text-secondary">
                   <tr>
                     <th class="px-4 py-3 rounded-tl-xl">Fecha</th>
                     <th class="px-4 py-3">Hora</th>
                     <th class="px-4 py-3">Cliente</th>
+                    <th class="px-4 py-3">Contacto</th>
                     <th class="px-4 py-3">Servicio</th>
                     <th class="px-4 py-3 text-right">Valor</th>
                     <th class="px-4 py-3 text-center">Estado</th>
@@ -190,13 +253,14 @@ interface ServiceOption {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                  @for (apt of upcomingAppointments; track apt.id) {
+                  @for (apt of paginatedAppointments(); track apt.id) {
                     <tr class="transition-colors hover:bg-gray-50/60">
                       <td class="px-4 py-3 whitespace-nowrap font-medium text-text-primary">{{ apt.date }}</td>
                       <td class="px-4 py-3 whitespace-nowrap text-text-secondary">{{ apt.time }}</td>
                       <td class="px-4 py-3">
                         <span class="block max-w-[150px] truncate font-medium text-text-primary">{{ apt.client_name }}</span>
                       </td>
+                      <td class="px-4 py-3 whitespace-nowrap text-text-secondary">{{ apt.client_phone || '-' }}</td>
                       <td class="px-4 py-3">
                         <span class="block max-w-[170px] truncate text-text-primary">{{ apt.service_name }}</span>
                       </td>
@@ -234,15 +298,44 @@ interface ServiceOption {
                 </tbody>
               </table>
             </div>
+
+            @if (appointmentTotalPages() > 1) {
+              <div class="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-xs font-medium text-text-secondary">
+                  Mostrando {{ appointmentPageStart() }}-{{ appointmentPageEnd() }} de {{ upcomingAppointments.length }} citas
+                </p>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="btn-secondary flex-1 justify-center sm:flex-none"
+                    [disabled]="appointmentPage === 1"
+                    (click)="previousAppointmentPage()"
+                  >
+                    Anterior
+                  </button>
+                  <span class="min-w-16 text-center text-xs font-semibold text-text-secondary">
+                    {{ appointmentPage }} / {{ appointmentTotalPages() }}
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-secondary flex-1 justify-center sm:flex-none"
+                    [disabled]="appointmentPage === appointmentTotalPages()"
+                    (click)="nextAppointmentPage()"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            }
           }
         </div>
       </div>
       </div>
 
       @if (showAppointmentModal) {
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in-up">
-            <div class="px-6 py-4 border-b border-border flex justify-between items-center bg-gray-50/50">
+        <div class="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div class="flex h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl animate-fade-in-up sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+            <div class="flex flex-shrink-0 items-center justify-between border-b border-border bg-gray-50/50 px-5 py-3 sm:px-6 sm:py-4">
               <h3 class="text-lg font-bold text-text-primary">Editar cita</h3>
               <button type="button" (click)="closeAppointmentModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-2 leading-none">&times;</button>
             </div>
@@ -250,7 +343,8 @@ interface ServiceOption {
             @if (appointmentModalLoading) {
               <div class="p-8 text-center text-text-secondary animate-pulse">Cargando cita...</div>
             } @else {
-              <form [formGroup]="appointmentForm" (ngSubmit)="saveAppointment()" class="p-6 space-y-4">
+              <form [formGroup]="appointmentForm" (ngSubmit)="saveAppointment()" class="flex min-h-0 flex-1 flex-col">
+                <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 pb-5 sm:px-6 sm:py-6">
                 @if (appointmentErrorMessage) {
                   <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {{ appointmentErrorMessage }}
@@ -283,16 +377,21 @@ interface ServiceOption {
                   </select>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="form-label">Fecha *</label>
                     <input type="date" formControlName="date" class="form-input" />
                   </div>
                   <div>
                     <label class="form-label">Hora *</label>
-                    <input type="time" formControlName="time" class="form-input" />
+                    <select formControlName="time" class="form-input">
+                      <option value="">Hora</option>
+                      @for (time of appointmentTimeOptions; track time) {
+                        <option [value]="time">{{ time }}</option>
+                      }
+                    </select>
                   </div>
-                  <div>
+                  <div class="col-span-2">
                     <label class="form-label">Estado *</label>
                     <select formControlName="status" class="form-input">
                       <option value="pending">Pendiente</option>
@@ -304,14 +403,22 @@ interface ServiceOption {
                   </div>
                 </div>
 
+                @if (appointmentOutsideHoursWarning) {
+                  <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                    Estan tomando un horario fuera de tu rango configurado
+                  </div>
+                }
+
                 <div>
                   <label class="form-label">Notas</label>
                   <textarea formControlName="notes" class="form-input" rows="3"></textarea>
                 </div>
 
-                <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-border">
-                  <button type="button" class="btn-secondary" (click)="closeAppointmentModal()">Cancelar</button>
-                  <button type="submit" class="btn-primary" [disabled]="appointmentSaving">
+                </div>
+
+                <div class="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-border bg-white px-5 py-3 shadow-[0_-10px_24px_rgba(15,23,42,0.06)] sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:py-4 sm:shadow-none">
+                  <button type="button" class="btn-secondary w-full justify-center sm:w-auto" (click)="closeAppointmentModal()">Cancelar</button>
+                  <button type="submit" class="btn-primary w-full justify-center sm:w-auto" [disabled]="appointmentSaving">
                     {{ appointmentSaving ? 'Guardando...' : 'Guardar cambios' }}
                   </button>
                 </div>
@@ -459,6 +566,8 @@ export class DashboardComponent implements OnInit {
   appointmentsLoading = true;
   appointmentFiltersExpanded = false;
   upcomingAppointments: any[] = [];
+  appointmentPage = 1;
+  readonly appointmentPageSize = 5;
   activeFinanceType: 'Ingresos' | 'Egresos' = 'Ingresos';
   categories: ExpenseCategory[] = [];
   showTxModal = false;
@@ -472,15 +581,18 @@ export class DashboardComponent implements OnInit {
   copyLinkLabel = 'Copiar enlace';
   selectedAppointmentId: number | null = null;
   appointmentErrorMessage = '';
+  appointmentOutsideHoursWarning = false;
+  openingHours: OpeningHour[] = [];
   txForm: FormGroup;
   appointmentForm: FormGroup;
   appointmentServices: ServiceOption[] = [];
+  appointmentTimeOptions = this.generateAppointmentTimeOptions();
 
   kpis: any[] = [
     { label: 'Citas Hoy', value: '0', iconPath: 'assets/Interfaz/Citas.png', iconBg: '#EFF6FF', trend: 'Hoy', trendColor: 'text-text-secondary' },
-    { label: 'Ingresos (Mes)', value: '$0', iconPath: 'assets/Interfaz/Finanzas.png', iconBg: '#F0FDF4', trend: 'Actual', trendColor: 'text-success' },
-    { label: 'Egresos (Mes)', value: '$0', iconPath: 'assets/Interfaz/Finanzas.png', iconBg: '#FEF2F2', trend: 'Actual', trendColor: 'text-danger' },
-    { label: 'Balance', value: '$0', iconPath: 'assets/Interfaz/Dashboard.png', iconBg: '#F8FAFC', trend: 'Mensual', trendColor: 'text-text-secondary' },
+    { label: 'Ingresos', value: '$0', iconPath: 'assets/Interfaz/Finanzas.png', iconBg: '#F0FDF4', trend: 'Actual', trendColor: 'text-success', feature: 'income_summary' as FeatureKey },
+    { label: 'Egresos (Mes)', value: '$0', iconPath: 'assets/Interfaz/Finanzas.png', iconBg: '#FEF2F2', trend: 'Actual', trendColor: 'text-danger', feature: 'expenses' as FeatureKey },
+    { label: 'Balance', value: '$0', iconPath: 'assets/Interfaz/Dashboard.png', iconBg: '#F8FAFC', trend: 'Mensual', trendColor: 'text-text-secondary', feature: 'balance' as FeatureKey },
   ];
 
   appointmentFilters: AppointmentFilters = {
@@ -498,6 +610,7 @@ export class DashboardComponent implements OnInit {
     private toastService: ToastService,
     private businessService: BusinessService,
     private supabase: SupabaseService,
+    private subscriptionService: SubscriptionService,
     public router: Router
   ) {
     this.txForm = this.fb.group({
@@ -521,10 +634,144 @@ export class DashboardComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadData();
+    if (!this.businessService.currentBusiness()) {
+      this.loading = false;
+      this.appointmentsLoading = false;
+      return;
+    }
+
+    this.subscriptionService.ensureLoaded().subscribe({
+      next: () => {
+        this.loadData();
+        if (this.hasFeature('expenses')) {
+          void this.loadCategories();
+        }
+      },
+      error: () => this.loadData(),
+    });
+
     void this.loadAppointments();
     void this.loadAppointmentServices();
-    void this.loadCategories();
+    void this.loadOpeningHours();
+    this.watchAppointmentScheduleWarning();
+  }
+
+  visibleKpis(): any[] {
+    return this.kpis.filter(kpi => !kpi.feature || this.hasFeature(kpi.feature));
+  }
+
+  hasFeature(feature: FeatureKey): boolean {
+    return this.subscriptionService.hasFeature(feature);
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
+  }
+
+  trialPresentation(): TrialPresentation | null {
+    return this.subscriptionService.trialPresentation();
+  }
+
+  trialNoticeClass(tone: TrialPresentation['tone']): string {
+    if (tone === 'urgent') return 'border-red-200 bg-red-50 text-red-700';
+    if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-800';
+
+    return 'border-border bg-white text-text-primary';
+  }
+
+  private generateAppointmentTimeOptions(): string[] {
+    const options: string[] = [];
+
+    for (let hour = 0; hour < 24; hour++) {
+      const hh = hour.toString().padStart(2, '0');
+      options.push(`${hh}:00`);
+      options.push(`${hh}:30`);
+    }
+
+    return options;
+  }
+
+  private normalizeAppointmentTime(time: string): string {
+    const [hourPart, minutePart] = time.split(':');
+    const hour = Number(hourPart);
+    const minute = Number(minutePart);
+
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+      return '';
+    }
+
+    let roundedHour = hour;
+    const roundedMinute = minute < 15 ? 0 : minute < 45 ? 30 : 0;
+    if (minute >= 45) {
+      roundedHour = (hour + 1) % 24;
+    }
+
+    return `${roundedHour.toString().padStart(2, '0')}:${roundedMinute.toString().padStart(2, '0')}`;
+  }
+
+  private watchAppointmentScheduleWarning(): void {
+    const dateControl = this.appointmentForm.get('date');
+    const timeControl = this.appointmentForm.get('time');
+    const serviceControl = this.appointmentForm.get('service_id');
+
+    if (!dateControl || !timeControl || !serviceControl) return;
+
+    combineLatest([
+      dateControl.valueChanges.pipe(startWith(dateControl.value)),
+      timeControl.valueChanges.pipe(startWith(timeControl.value)),
+      serviceControl.valueChanges.pipe(startWith(serviceControl.value)),
+    ]).subscribe(() => this.updateAppointmentOutsideHoursWarning());
+  }
+
+  private async loadOpeningHours(): Promise<void> {
+    this.businessService.getOpeningHours().subscribe({
+      next: (res) => {
+        this.openingHours = (res.data ?? []).map((hour: any) => ({
+          day_of_week: Number(hour.day_of_week),
+          is_open: Boolean(hour.is_open),
+          open_time: hour.open_time,
+          close_time: hour.close_time,
+        }));
+        this.updateAppointmentOutsideHoursWarning();
+      },
+      error: () => {
+        this.openingHours = [];
+      },
+    });
+  }
+
+  private updateAppointmentOutsideHoursWarning(): void {
+    const value = this.appointmentForm.value;
+    this.appointmentOutsideHoursWarning = this.isAppointmentOutsideConfiguredHours(
+      value.date,
+      value.time,
+      Number(value.service_id)
+    );
+  }
+
+  private isAppointmentOutsideConfiguredHours(dateValue: string, timeValue: string, serviceId: number): boolean {
+    if (!dateValue || !timeValue || !Number.isFinite(serviceId) || this.openingHours.length === 0) {
+      return false;
+    }
+
+    const date = new Date(`${dateValue}T00:00:00`);
+    const schedule = this.openingHours.find(hour => hour.day_of_week === date.getDay());
+    if (!schedule?.is_open || !schedule.open_time || !schedule.close_time) {
+      return true;
+    }
+
+    const serviceDuration = this.appointmentServices.find(service => service.id === serviceId)?.duration_minutes ?? 0;
+    const startMinutes = this.toMinutes(timeValue);
+    const endMinutes = startMinutes + serviceDuration;
+    const openMinutes = this.toMinutes(schedule.open_time.slice(0, 5));
+    const closeMinutes = this.toMinutes(schedule.close_time.slice(0, 5));
+
+    return startMinutes < openMinutes || endMinutes > closeMinutes;
+  }
+
+  private toMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return (hours * 60) + minutes;
   }
 
   async copyBookingLink(): Promise<void> {
@@ -593,6 +840,7 @@ export class DashboardComponent implements OnInit {
 
   applyAppointmentFilters(): void {
     this.appointmentFiltersExpanded = false;
+    this.appointmentPage = 1;
     void this.loadAppointments();
   }
 
@@ -606,11 +854,42 @@ export class DashboardComponent implements OnInit {
     try {
       const appointments = await this.appointmentsService.list(this.appointmentFilters);
       this.upcomingAppointments = appointments.map(appointment => this.mapAppointment(appointment));
+      this.clampAppointmentPage();
     } catch (error: any) {
       this.toastService.error(error?.message ?? 'No se pudieron cargar las citas.');
     } finally {
       this.appointmentsLoading = false;
     }
+  }
+
+  paginatedAppointments(): any[] {
+    const start = (this.appointmentPage - 1) * this.appointmentPageSize;
+    return this.upcomingAppointments.slice(start, start + this.appointmentPageSize);
+  }
+
+  appointmentTotalPages(): number {
+    return Math.max(1, Math.ceil(this.upcomingAppointments.length / this.appointmentPageSize));
+  }
+
+  appointmentPageStart(): number {
+    if (this.upcomingAppointments.length === 0) return 0;
+    return ((this.appointmentPage - 1) * this.appointmentPageSize) + 1;
+  }
+
+  appointmentPageEnd(): number {
+    return Math.min(this.appointmentPage * this.appointmentPageSize, this.upcomingAppointments.length);
+  }
+
+  previousAppointmentPage(): void {
+    this.appointmentPage = Math.max(1, this.appointmentPage - 1);
+  }
+
+  nextAppointmentPage(): void {
+    this.appointmentPage = Math.min(this.appointmentTotalPages(), this.appointmentPage + 1);
+  }
+
+  private clampAppointmentPage(): void {
+    this.appointmentPage = Math.min(this.appointmentPage, this.appointmentTotalPages());
   }
 
   private mapAppointment(appointment: AppointmentRow): any {
@@ -619,6 +898,7 @@ export class DashboardComponent implements OnInit {
     return {
       id: appointment.id,
       client_name: appointment.client_name,
+      client_phone: appointment.client_phone,
       service_name: appointment.service?.name ?? 'Cita personalizada',
       service_price: Number.isFinite(servicePrice) ? servicePrice : 0,
       status: appointment.status,
@@ -665,12 +945,12 @@ export class DashboardComponent implements OnInit {
         client_phone: appointment.client_phone ?? '',
         service_id: appointment.service_id,
         date: date.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }),
-        time: date.toLocaleTimeString('en-GB', {
+        time: this.normalizeAppointmentTime(date.toLocaleTimeString('en-GB', {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
           timeZone: 'America/Santiago',
-        }),
+        })),
         status: appointment.status,
         notes: appointment.notes ?? '',
       });
@@ -687,9 +967,12 @@ export class DashboardComponent implements OnInit {
     this.appointmentSaving = false;
     this.selectedAppointmentId = null;
     this.appointmentErrorMessage = '';
+    this.appointmentOutsideHoursWarning = false;
   }
 
   async saveAppointment(): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+
     if (this.appointmentForm.invalid || !this.selectedAppointmentId) {
       this.appointmentForm.markAllAsTouched();
       return;
@@ -742,6 +1025,7 @@ export class DashboardComponent implements OnInit {
       duration_minutes: Number(service.duration_minutes),
       price: Number(service.price ?? 0),
     }));
+    this.updateAppointmentOutsideHoursWarning();
   }
 
   private copyWithFallback(text: string): boolean {
@@ -775,6 +1059,7 @@ export class DashboardComponent implements OnInit {
         // Actualizar KPIs
         const fmt = new Intl.NumberFormat('es-CL');
         this.kpis[0].value = data.kpis.today_appointments.toString();
+        this.kpis[1].label = this.subscriptionService.incomeSummaryLabel();
         this.kpis[1].value = `$${fmt.format(data.kpis.monthly_income)}`;
         this.kpis[2].value = `$${fmt.format(data.kpis.monthly_expenses)}`;
         this.kpis[3].value = `$${fmt.format(data.kpis.monthly_balance)}`;
@@ -787,6 +1072,17 @@ export class DashboardComponent implements OnInit {
   }
 
   openTransactionModal(type: 'Ingresos' | 'Egresos'): void {
+    if (!this.assertOperationAllowed()) return;
+
+    const requiredFeature: FeatureKey = type === 'Ingresos' ? 'manual_income' : 'expenses';
+
+    if (!this.hasFeature(requiredFeature)) {
+      void this.router.navigate(['/app/suscripcion'], {
+        queryParams: { blockedFeature: requiredFeature },
+      });
+      return;
+    }
+
     this.activeFinanceType = type;
     this.txForm.reset({ recorded_at: new Date().toISOString().split('T')[0] });
 
@@ -806,6 +1102,17 @@ export class DashboardComponent implements OnInit {
   }
 
   async saveTransaction(): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+
+    const requiredFeature: FeatureKey = this.activeFinanceType === 'Ingresos' ? 'manual_income' : 'expenses';
+
+    if (!this.hasFeature(requiredFeature)) {
+      void this.router.navigate(['/app/suscripcion'], {
+        queryParams: { blockedFeature: requiredFeature },
+      });
+      return;
+    }
+
     if (this.txForm.invalid) {
       this.txForm.markAllAsTouched();
       return;
@@ -842,6 +1149,11 @@ export class DashboardComponent implements OnInit {
   }
 
   async loadCategories(): Promise<void> {
+    if (!this.hasFeature('expenses')) {
+      this.categories = [];
+      return;
+    }
+
     const business = this.businessService.currentBusiness();
     if (!business) return;
 
@@ -861,10 +1173,28 @@ export class DashboardComponent implements OnInit {
   }
 
   openCategoryModal(): void {
+    if (!this.assertOperationAllowed()) return;
+
+    if (!this.hasFeature('expenses')) {
+      void this.router.navigate(['/app/suscripcion'], {
+        queryParams: { blockedFeature: 'expenses' },
+      });
+      return;
+    }
+
     this.showCatModal = true;
   }
 
   async saveCategory(): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+
+    if (!this.hasFeature('expenses')) {
+      void this.router.navigate(['/app/suscripcion'], {
+        queryParams: { blockedFeature: 'expenses' },
+      });
+      return;
+    }
+
     const business = this.businessService.currentBusiness();
     if (!business || !this.newCatName.trim()) return;
 
@@ -888,6 +1218,15 @@ export class DashboardComponent implements OnInit {
   }
 
   async deleteCategory(id: number): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+
+    if (!this.hasFeature('expenses')) {
+      void this.router.navigate(['/app/suscripcion'], {
+        queryParams: { blockedFeature: 'expenses' },
+      });
+      return;
+    }
+
     if (!confirm('Eliminar esta categoria? Esto no eliminara los gastos asignados previamente.')) return;
 
     const business = this.businessService.currentBusiness();
@@ -905,6 +1244,13 @@ export class DashboardComponent implements OnInit {
     }
 
     await this.loadCategories();
+  }
+
+  private assertOperationAllowed(): boolean {
+    if (this.subscriptionService.canOperate()) return true;
+
+    this.toastService.error('Tu suscripcion esta en periodo de gracia. Puedes consultar datos, pero debes renovar para realizar cambios.');
+    return false;
   }
 }
 

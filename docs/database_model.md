@@ -156,6 +156,8 @@ Servicios ofrecidos por el negocio.
 | duration_minutes | INT | Duración del servicio |
 | price | DECIMAL(10,2) DEFAULT 0 | Precio referencial |
 | is_active | TINYINT(1) DEFAULT 1 | |
+| modality | ENUM('presencial','online') DEFAULT 'presencial' | Modalidad base para nuevas citas |
+| generate_google_meet | TINYINT(1) DEFAULT 0 | Solo puede ser true si modality = online |
 | created_at | TIMESTAMP | |
 | updated_at | TIMESTAMP | |
 | deleted_at | TIMESTAMP NULL | Soft delete |
@@ -198,6 +200,11 @@ Citas del negocio. Entidad central del sistema.
 | client_phone | VARCHAR(30) NULL | |
 | scheduled_at | DATETIME | Fecha y hora de la cita |
 | duration_minutes | INT | Copia de la duración al momento de crear |
+| service_modality | ENUM('presencial','online') NULL | Snapshot de modalidad del servicio |
+| generate_google_meet | TINYINT(1) DEFAULT 0 | Snapshot de si la cita debe generar Meet |
+| google_meet_url | TEXT NULL | URL de Google Meet cuando la conferencia exista |
+| google_conference_id | VARCHAR(255) NULL | ID de conferencia devuelto por Google |
+| google_conference_status | ENUM('none','pending','created','failed') DEFAULT 'none' | Estado local de conferencia |
 | status | ENUM('pending','confirmed','completed','cancelled','no_show') DEFAULT 'pending' | |
 | notes | TEXT NULL | Observaciones |
 | is_from_public | TINYINT(1) DEFAULT 0 | Si vino de la página pública |

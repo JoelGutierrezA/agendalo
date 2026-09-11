@@ -38,7 +38,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
             </p>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-10">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-10">
             @for (plan of plans; track plan.name) {
               <article
                 class="relative overflow-hidden border rounded-lg p-5 flex flex-col transition-all duration-200 hover:-translate-y-1"
@@ -138,78 +138,66 @@ export class PlansComponent {
   plans = [
     {
       name: '14 dias gratis',
-      description: 'Prueba las funciones principales antes de elegir un plan mensual.',
+      description: 'Prueba Skedia completo antes de elegir un plan mensual.',
       price: '$0',
       period: 'por 14 dias',
       cta: 'Comenzar prueba',
       tone: 'accent',
-      idealFor: 'Negocios que quieren validar Skedia sin compromiso.',
+      idealFor: 'Negocios que quieren probar agenda, finanzas e insumos sin compromiso.',
       includes: [
-        'Agenda online',
+        'Acceso Premium temporal',
+        'Agenda online y Google Calendar',
         'Pagina publica de reservas',
-        'Servicios y clientes',
-        'Dashboard inicial',
+        'Clientes, servicios e ingresos',
+        'Balance, egresos e insumos',
         'Sin permanencia',
       ],
     },
     {
-      name: 'Basico',
+      name: 'Agenda',
       description: 'Ordena reservas, servicios y clientes en una sola plataforma.',
       price: '$9.990',
       period: 'CLP / mes',
-      cta: 'Elegir Basico',
+      cta: 'Elegir Agenda',
       tone: 'basic',
-      idealFor: 'Profesionales independientes o negocios pequenos.',
+      idealFor: 'Psicologos, consultores y profesionales que viven de agendar horas.',
       includes: [
         '1 negocio',
         'Agenda mensual, semanal y anual',
         'Pagina publica de reservas',
         'Gestion de clientes',
         'Gestion de servicios',
-      ],
-    },
-    {
-      name: 'Medio',
-      description: 'Suma control financiero e insumos para entender mejor tu operacion.',
-      price: '$19.990',
-      period: 'CLP / mes',
-      cta: 'Elegir Medio',
-      tone: 'accent',
-      idealFor: 'Negocios con flujo constante de citas y compras.',
-      includes: [
-        'Todo Basico',
-        'Finanzas: ingresos y egresos',
-        'Gestion de insumos',
-        'Ingresos automaticos por citas completadas',
-        'Reportes de rendimiento',
+        'Google Calendar',
+        'Vista simple de ingresos',
       ],
     },
     {
       name: 'Premium',
-      description: 'Automatizacion y soporte para equipos que necesitan mas capacidad.',
-      price: '$34.990',
+      description: 'Suma balances, egresos, insumos e inventario para controlar tu operacion.',
+      price: '$19.990',
       period: 'CLP / mes',
       cta: 'Elegir Premium',
       tone: 'premium',
-      idealFor: 'Equipos y negocios que quieren automatizar agenda y seguimiento.',
+      idealFor: 'Barberias, centros esteticos y negocios con compras o insumos recurrentes.',
       includes: [
-        'Todo Medio',
-        'Google Calendar',
-        'Eventos externos en agenda',
-        'Invitaciones al cliente',
-        'Soporte prioritario',
+        'Todo Agenda',
+        'Balance de ingresos y egresos',
+        'Registro manual de ingresos',
+        'Gestion de egresos',
+        'Insumos e inventario',
       ],
     },
   ];
 
   comparison = [
-    { label: 'Prueba gratis', values: ['14 dias', 'No', 'No', 'No'] },
-    { label: 'Agenda y citas', values: ['Incluido', 'Incluido', 'Incluido', 'Incluido'] },
-    { label: 'Pagina publica', values: ['Incluido', 'Incluido', 'Incluido', 'Incluido'] },
-    { label: 'Clientes y servicios', values: ['Incluido', 'Incluido', 'Incluido', 'Incluido'] },
-    { label: 'Finanzas', values: ['Basico', 'No', 'Incluido', 'Incluido'] },
-    { label: 'Insumos', values: ['No', 'No', 'Incluido', 'Incluido'] },
-    { label: 'Google Calendar', values: ['No', 'No', 'No', 'Incluido'] },
-    { label: 'Soporte', values: ['Comunidad', 'Estandar', 'Estandar', 'Prioritario'] },
+    { label: 'Prueba gratis', values: ['14 dias Premium', 'No', 'No'] },
+    { label: 'Agenda y citas', values: ['Incluido', 'Incluido', 'Incluido'] },
+    { label: 'Pagina publica', values: ['Incluido', 'Incluido', 'Incluido'] },
+    { label: 'Clientes y servicios', values: ['Incluido', 'Incluido', 'Incluido'] },
+    { label: 'Google Calendar', values: ['Incluido', 'Incluido', 'Incluido'] },
+    { label: 'Ingresos simples', values: ['Incluido', 'Incluido', 'Incluido'] },
+    { label: 'Balance completo', values: ['Incluido', 'No', 'Incluido'] },
+    { label: 'Egresos', values: ['Incluido', 'No', 'Incluido'] },
+    { label: 'Insumos e inventario', values: ['Incluido', 'No', 'Incluido'] },
   ];
 }

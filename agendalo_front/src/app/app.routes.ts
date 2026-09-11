@@ -1,23 +1,25 @@
 import { Routes } from '@angular/router';
+import { adminPlatformGuard } from './core/guards/admin-platform.guard';
 import { authGuard } from './core/guards/auth.guard';
 import { businessSetupGuard } from './core/guards/business-setup.guard';
+import { featureGuard } from './core/guards/feature.guard';
 import { guestGuard } from './core/guards/guest.guard';
+import { subscriptionAccessGuard } from './core/guards/subscription-access.guard';
 
 export const routes: Routes = [
   {
     path: 'planes',
     loadComponent: () =>
       import('./features/plans/plans.component').then(m => m.PlansComponent),
-    title: 'Planes - Skedia'
+    title: 'Planes - Skedia',
   },
   {
     path: '',
     loadComponent: () =>
       import('./features/home/home.component').then(m => m.HomeComponent),
-    title: 'Skedia'
+    title: 'Skedia',
   },
 
-  // === Rutas Públicas (clientes finales) ===
   {
     path: 'negocio',
     loadComponent: () =>
@@ -31,7 +33,7 @@ export const routes: Routes = [
           import('./features/public-booking/pages/booking-page/booking-page.component').then(
             m => m.BookingPageComponent
           ),
-        title: 'Reservar Cita'
+        title: 'Reservar Cita',
       },
       {
         path: ':slug/confirmacion',
@@ -39,12 +41,11 @@ export const routes: Routes = [
           import('./features/public-booking/pages/booking-confirmation/booking-confirmation.component').then(
             m => m.BookingConfirmationComponent
           ),
-        title: 'Reserva Confirmada'
+        title: 'Reserva Confirmada',
       },
-    ]
+    ],
   },
 
-  // === Rutas de Autenticación ===
   {
     path: '',
     canActivate: [guestGuard],
@@ -53,13 +54,13 @@ export const routes: Routes = [
         path: 'login',
         loadComponent: () =>
           import('./features/auth/pages/login/login.component').then(m => m.LoginComponent),
-        title: 'Iniciar Sesión — Skedia'
+        title: 'Iniciar Sesion - Skedia',
       },
       {
         path: 'registro',
         loadComponent: () =>
           import('./features/auth/pages/register/register.component').then(m => m.RegisterComponent),
-        title: 'Crear cuenta — Skedia'
+        title: 'Crear cuenta - Skedia',
       },
       {
         path: 'recuperar-contrasena',
@@ -67,7 +68,7 @@ export const routes: Routes = [
           import('./features/auth/pages/forgot-password/forgot-password.component').then(
             m => m.ForgotPasswordComponent
           ),
-        title: 'Recuperar contraseña — Skedia'
+        title: 'Recuperar contrasena - Skedia',
       },
       {
         path: 'restablecer-contrasena',
@@ -75,23 +76,17 @@ export const routes: Routes = [
           import('./features/auth/pages/reset-password/reset-password.component').then(
             m => m.ResetPasswordComponent
           ),
-        title: 'Nueva contraseña — Skedia'
+        title: 'Nueva contrasena - Skedia',
       },
-    ]
+    ],
   },
 
-  // === Onboarding (usuario autenticado sin negocio) ===
   {
     path: 'onboarding',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/auth/pages/onboarding/onboarding.component').then(
-        m => m.OnboardingComponent
-      ),
-    title: 'Configura tu negocio — Skedia'
+    redirectTo: 'app/configuracion/negocio',
+    pathMatch: 'full',
   },
 
-  // === Panel Administrativo (dueño del negocio) ===
   {
     path: 'app',
     loadComponent: () =>
@@ -103,63 +98,70 @@ export const routes: Routes = [
       {
         path: '',
         redirectTo: 'dashboard',
-        pathMatch: 'full'
+        pathMatch: 'full',
       },
       {
         path: 'dashboard',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/dashboard/pages/dashboard/dashboard.component').then(
             m => m.DashboardComponent
           ),
-        title: 'Dashboard - Skedia'
+        title: 'Dashboard - Skedia',
       },
       {
         path: 'agenda',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/appointments/pages/calendar/calendar.component').then(
             m => m.CalendarComponent
           ),
-        title: 'Agenda — Skedia'
+        title: 'Agenda - Skedia',
       },
       {
         path: 'citas/nueva',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/appointments/pages/appointment-form/appointment-form.component').then(
             m => m.AppointmentFormComponent
           ),
-        title: 'Nueva Cita — Skedia'
+        title: 'Nueva Cita - Skedia',
       },
       {
         path: 'citas/:id/editar',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/appointments/pages/appointment-form/appointment-form.component').then(
             m => m.AppointmentFormComponent
           ),
-        title: 'Editar Cita — Skedia'
+        title: 'Editar Cita - Skedia',
       },
       {
         path: 'clientes',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/clients/pages/clients-list/clients-list.component').then(
             m => m.ClientsListComponent
           ),
-        title: 'Clientes — Skedia'
+        title: 'Clientes - Skedia',
       },
       {
         path: 'clientes/:id',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/clients/pages/client-detail/client-detail.component').then(
             m => m.ClientDetailComponent
           ),
-        title: 'Perfil de Cliente — Skedia'
+        title: 'Perfil de Cliente - Skedia',
       },
       {
         path: 'servicios',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/services/pages/services-list/services-list.component').then(
             m => m.ServicesListComponent
           ),
-        title: 'Servicios — Skedia'
+        title: 'Servicios - Skedia',
       },
       {
         path: 'suscripcion',
@@ -167,31 +169,41 @@ export const routes: Routes = [
           import('./features/subscription/pages/subscription/subscription.component').then(
             m => m.SubscriptionComponent
           ),
-        title: 'Suscripcion - Skedia'
+        title: 'Suscripcion - Skedia',
+      },
+      {
+        path: 'configuracion/negocio',
+        loadComponent: () =>
+          import('./features/auth/pages/onboarding/onboarding.component').then(
+            m => m.OnboardingComponent
+          ),
+        title: 'Configura tu negocio - Skedia',
       },
       {
         path: 'insumos',
+        canActivate: [subscriptionAccessGuard, featureGuard],
+        data: { feature: 'supplies' },
         loadComponent: () =>
           import('./features/finance/pages/supplies/supplies.component').then(
             m => m.SuppliesComponent
           ),
-        title: 'Insumos y Compras — Skedia'
+        title: 'Insumos y Compras - Skedia',
       },
       {
         path: 'configuracion',
+        canActivate: [subscriptionAccessGuard],
         loadComponent: () =>
           import('./features/settings/pages/settings/settings.component').then(
             m => m.SettingsComponent
           ),
-        title: 'Configuración — Skedia'
+        title: 'Configuracion - Skedia',
       },
-    ]
+    ],
   },
 
-  // === Admin de Plataforma (solo para platform_admins) ===
   {
     path: 'admin-plataforma',
-    canActivate: [authGuard],
+    canActivate: [authGuard, adminPlatformGuard],
     loadComponent: () =>
       import('./layouts/admin-layout/admin-layout.component').then(
         m => m.AdminLayoutComponent
@@ -203,15 +215,7 @@ export const routes: Routes = [
           import('./features/platform-admin/pages/admin-dashboard/admin-dashboard.component').then(
             m => m.AdminDashboardComponent
           ),
-        title: 'Dashboard Admin — Skedia'
-      },
-      {
-        path: 'negocios',
-        loadComponent: () =>
-          import('./features/platform-admin/pages/business-list/business-list.component').then(
-            m => m.BusinessListComponent
-          ),
-        title: 'Negocios — Skedia'
+        title: 'Dashboard Admin - Skedia',
       },
       {
         path: 'usuarios',
@@ -219,18 +223,17 @@ export const routes: Routes = [
           import('./features/platform-admin/pages/user-list/user-list.component').then(
             m => m.UserListComponent
           ),
-        title: 'Usuarios — Skedia'
-      }
-    ]
+        title: 'Usuarios - Skedia',
+      },
+    ],
   },
 
-  // === Redirects ===
   {
     path: '**',
     loadComponent: () =>
       import('./shared/components/not-found/not-found.component').then(
         m => m.NotFoundComponent
       ),
-    title: 'Página no encontrada — Skedia'
+    title: 'Pagina no encontrada - Skedia',
   },
 ];

@@ -5,6 +5,7 @@ import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { BusinessService } from '../../../settings/services/business.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 import { PublicFooterComponent } from '../../../../shared/components/public-footer/public-footer.component';
 
 @Component({
@@ -119,6 +120,7 @@ export class LoginComponent {
     private fb: FormBuilder,
     private authService: AuthService,
     private businessService: BusinessService,
+    private subscriptionService: SubscriptionService,
     private router: Router,
     private toastService: ToastService
   ) {
@@ -154,19 +156,31 @@ export class LoginComponent {
 
         if (user.business_id) {
           this.businessService.getBusiness().subscribe({
-            next: () => this.router.navigate(['/app/dashboard']),
-            error: () => this.router.navigate(['/onboarding'])
+            next: () => this.navigateAfterBusinessLoad(),
+            error: () => this.router.navigate(['/app/dashboard'])
           });
           return;
         }
 
-        this.router.navigate(['/onboarding']);
+        this.router.navigate(['/app/dashboard']);
       },
       error: (err) => {
         this.toastService.error(err?.message ?? 'No se pudo iniciar sesion');
         this.loading = false;
       },
       complete: () => { this.loading = false; }
+    });
+  }
+
+  private navigateAfterBusinessLoad(): void {
+    this.subscriptionService.loadCurrent().subscribe({
+      next: subscription => {
+        const target = this.subscriptionService.isExpiredEffective(subscription)
+          ? '/app/suscripcion'
+          : '/app/dashboard';
+        this.router.navigate([target]);
+      },
+      error: () => this.router.navigate(['/app/suscripcion']),
     });
   }
 }

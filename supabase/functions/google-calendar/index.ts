@@ -12,6 +12,19 @@ type GoogleIntegration = {
   expires_at: string | null;
 };
 
+type UserContext = {
+  userId: string;
+  businessId: number;
+};
+
+type GoogleConferenceStatus = 'none' | 'pending' | 'created' | 'failed';
+
+type GoogleConferenceState = {
+  google_meet_url: string | null;
+  google_conference_id: string | null;
+  google_conference_status: GoogleConferenceStatus;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-api-version',
@@ -79,6 +92,7 @@ Deno.serve(async (req) => {
     if (req.method === 'GET' && url.pathname.endsWith('/auth')) {
       const token = url.searchParams.get('token') ?? '';
       const context = await getUserContext(token);
+      await assertGoogleOperationalForUser(context);
       return redirect(await getAuthUrl(context.businessId, context.userId));
     }
 
@@ -100,6 +114,7 @@ Deno.serve(async (req) => {
       case 'status':
         return json({ data: await getStatus(context.businessId) });
       case 'auth-url':
+        await assertGoogleOperationalForUser(context);
         return json({ data: { auth_url: await getAuthUrl(context.businessId, context.userId) } });
       case 'disconnect':
         await disconnect(context.businessId);
@@ -108,6 +123,7 @@ Deno.serve(async (req) => {
         await syncAppointment(Number(body.appointment_id), true, context.businessId);
         return json({ data: true });
       case 'list-events':
+        await assertGoogleOperationalForUser(context);
         return json({
           data: await listGoogleEvents(
             context.businessId,
@@ -124,7 +140,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function requireUserContext(req: Request): Promise<{ userId: string; businessId: number }> {
+async function requireUserContext(req: Request): Promise<UserContext> {
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
 
@@ -133,7 +149,7 @@ async function requireUserContext(req: Request): Promise<{ userId: string; busin
   return getUserContext(token);
 }
 
-async function getUserContext(token: string): Promise<{ userId: string; businessId: number }> {
+async function getUserContext(token: string): Promise<UserContext> {
   const { data: userData, error: userError } = await anonClient.auth.getUser(token);
   if (userError || !userData.user) throw new Error('Sesion invalida.');
 
@@ -159,10 +175,59 @@ async function getUserContext(token: string): Promise<{ userId: string; business
   if (!profile.is_active) throw new Error('El perfil asociado a esta cuenta esta inactivo.');
   if (!profile.business_id) throw new Error('Debes tener un negocio configurado.');
 
+  await assertBusinessBelongsToUser(Number(profile.business_id), userData.user.id);
+
   return {
     userId: userData.user.id,
     businessId: Number(profile.business_id),
   };
+}
+
+async function assertBusinessBelongsToUser(businessId: number, userId: string): Promise<void> {
+  const { data: business, error } = await serviceClient
+    .from('businesses')
+    .select('id, owner_id')
+    .eq('id', businessId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!business) throw new Error('Negocio no encontrado.');
+
+  if (business.owner_id && business.owner_id !== userId) {
+    const { data: profile, error: profileError } = await serviceClient
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (profileError) throw new Error(profileError.message);
+    if (!profile) throw new Error('No tienes acceso a este negocio.');
+  }
+}
+
+async function assertGoogleOperationalForUser(context: UserContext): Promise<void> {
+  const { data: profile, error: profileError } = await serviceClient
+    .from('profiles')
+    .select('id, business_id, is_active')
+    .eq('id', context.userId)
+    .maybeSingle();
+
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) throw new Error('No existe un perfil asociado a esta cuenta.');
+  if (!profile.is_active) throw new Error('El perfil asociado a esta cuenta esta inactivo.');
+  if (Number(profile.business_id) !== context.businessId) throw new Error('No tienes acceso a este negocio.');
+
+  await assertBusinessBelongsToUser(context.businessId, context.userId);
+
+  if (!await isBusinessGoogleOperational(context.businessId)) {
+    throw new Error('Google Calendar no esta disponible para este negocio en este momento.');
+  }
+}
+
+async function assertGoogleOperationalForOAuthState(userId: string, businessId: number): Promise<void> {
+  await assertGoogleOperationalForUser({ userId, businessId });
 }
 
 async function getStatus(businessId: number) {
@@ -233,14 +298,18 @@ async function handleCallback(url: URL): Promise<Response> {
 
     const { data: stateRow, error: stateError } = await serviceClient
       .from('google_oauth_states')
-      .select('state, business_id, expires_at')
+      .select('state, business_id, user_id, expires_at')
       .eq('state', state)
       .maybeSingle();
 
     if (stateError || !stateRow) throw new Error('Estado OAuth invalido.');
-    if (new Date(stateRow.expires_at).getTime() <= Date.now()) throw new Error('Estado OAuth expirado.');
+    if (new Date(stateRow.expires_at).getTime() <= Date.now()) {
+      await serviceClient.from('google_oauth_states').delete().eq('state', state);
+      throw new Error('Estado OAuth expirado.');
+    }
 
     await serviceClient.from('google_oauth_states').delete().eq('state', state);
+    await assertGoogleOperationalForOAuthState(String(stateRow.user_id), Number(stateRow.business_id));
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -323,6 +392,8 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
     throw new Error('No tienes acceso a esta cita.');
   }
 
+  if (!await isBusinessGoogleOperational(Number(appointment.business_id))) return;
+
   const integration = await getIntegration(Number(appointment.business_id));
   if (!integration) return;
 
@@ -361,22 +432,55 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
 
   const calendarId = integration.calendar_id || 'primary';
   let googleEventId = appointment.google_event_id as string | null;
+  const shouldGenerateMeet = shouldGenerateGoogleMeet(appointment);
 
   if (googleEventId) {
-    const update = await googleFetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
-      accessToken,
-      { method: 'PATCH', body: JSON.stringify(payload) }
-    );
+    const existing = await getGoogleEvent(calendarId, googleEventId, accessToken);
+    if (existing.status === 'not_found') {
+      googleEventId = null;
+    } else if (existing.status !== 'ok') {
+      return;
+    } else {
+      const existingEvent = existing.event;
+      const existingConference = extractGoogleConferenceState(existingEvent);
+      const hasExistingConference = Boolean(existingEvent?.conferenceData);
 
-    if (update.ok) return;
-    if (update.status !== 404) return;
+      if (shouldGenerateMeet) {
+        if (
+          existingConference.google_conference_status !== 'created'
+          && existingConference.google_conference_status !== 'pending'
+        ) {
+          payload['conferenceData'] = buildMeetCreateRequest(appointment.id);
+        }
+      } else if (hasExistingConference && shouldClearGoogleConference(appointment)) {
+        payload['conferenceData'] = null;
+      }
 
-    googleEventId = null;
+      const update = await googleFetch(
+        withConferenceDataVersion(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`
+        ),
+        accessToken,
+        { method: 'PATCH', body: JSON.stringify(payload) }
+      );
+
+      if (!update.ok) return;
+
+      const updated = await update.json();
+      const conferenceSource = updated?.conferenceData ? updated : existingEvent;
+      await persistGoogleConferenceState(appointment.id, conferenceSource, shouldGenerateMeet);
+      return;
+    }
+  }
+
+  if (shouldGenerateMeet) {
+    payload['conferenceData'] = buildMeetCreateRequest(appointment.id);
   }
 
   const create = await googleFetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    withConferenceDataVersion(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+    ),
     accessToken,
     { method: 'POST', body: JSON.stringify(payload) }
   );
@@ -385,9 +489,22 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
 
   const created = await create.json();
   if (created.id) {
+    const update = await googleFetch(
+      withConferenceDataVersion(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(created.id)}`
+      ),
+      accessToken,
+      { method: 'GET' }
+    );
+
+    const createdWithConference = update.ok ? await update.json() : created;
+    const conferenceUpdate = buildAppointmentGoogleUpdate(createdWithConference, shouldGenerateMeet);
     await serviceClient
       .from('appointments')
-      .update({ google_event_id: created.id })
+      .update({
+        google_event_id: created.id,
+        ...conferenceUpdate,
+      })
       .eq('id', appointment.id);
   }
 }
@@ -448,7 +565,10 @@ async function listGoogleEvents(
 }
 
 async function deleteGoogleEvent(appointment: any, integration: GoogleIntegration): Promise<void> {
-  if (!appointment.google_event_id) return;
+  if (!appointment.google_event_id) {
+    await clearAppointmentGoogleConference(appointment.id);
+    return;
+  }
 
   const accessToken = await getValidAccessToken(integration);
   if (!accessToken) return;
@@ -463,9 +583,170 @@ async function deleteGoogleEvent(appointment: any, integration: GoogleIntegratio
   if (response.ok || response.status === 404) {
     await serviceClient
       .from('appointments')
-      .update({ google_event_id: null })
+      .update({
+        google_event_id: null,
+        google_meet_url: null,
+        google_conference_id: null,
+        google_conference_status: 'none',
+      })
       .eq('id', appointment.id);
   }
+}
+
+async function getGoogleEvent(calendarId: string, googleEventId: string, accessToken: string): Promise<
+  | { status: 'ok'; event: any }
+  | { status: 'not_found' }
+  | { status: 'error' }
+> {
+  const response = await googleFetch(
+    withConferenceDataVersion(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`
+    ),
+    accessToken
+  );
+
+  if (response.ok) return { status: 'ok', event: await response.json() };
+  if (response.status === 404) return { status: 'not_found' };
+  return { status: 'error' };
+}
+
+function shouldGenerateGoogleMeet(appointment: any): boolean {
+  return appointment.service_modality === 'online' && appointment.generate_google_meet === true;
+}
+
+function hasStoredGoogleMeet(appointment: any): boolean {
+  return Boolean(
+    appointment.google_meet_url
+    || appointment.google_conference_id
+    || (appointment.google_conference_status && appointment.google_conference_status !== 'none')
+  );
+}
+
+function shouldClearGoogleConference(appointment: any): boolean {
+  return appointment.service_modality === 'presencial' || hasStoredGoogleMeet(appointment);
+}
+
+function buildMeetCreateRequest(appointmentId: number | string): Record<string, unknown> {
+  return {
+    createRequest: {
+      requestId: `skedia-appointment-${appointmentId}-meet`,
+      conferenceSolutionKey: {
+        type: 'hangoutsMeet',
+      },
+    },
+  };
+}
+
+function withConferenceDataVersion(url: string): string {
+  const parsed = new URL(url);
+  parsed.searchParams.set('conferenceDataVersion', '1');
+  return parsed.toString();
+}
+
+async function persistGoogleConferenceState(
+  appointmentId: number | string,
+  googleEvent: any,
+  shouldGenerateMeet: boolean
+): Promise<void> {
+  await serviceClient
+    .from('appointments')
+    .update(buildAppointmentGoogleUpdate(googleEvent, shouldGenerateMeet))
+    .eq('id', appointmentId);
+}
+
+async function clearAppointmentGoogleConference(appointmentId: number | string): Promise<void> {
+  await serviceClient
+    .from('appointments')
+    .update({
+      google_meet_url: null,
+      google_conference_id: null,
+      google_conference_status: 'none',
+    })
+    .eq('id', appointmentId);
+}
+
+function buildAppointmentGoogleUpdate(googleEvent: any, shouldGenerateMeet: boolean): GoogleConferenceState {
+  if (!shouldGenerateMeet) {
+    return {
+      google_meet_url: null,
+      google_conference_id: null,
+      google_conference_status: 'none',
+    };
+  }
+
+  const state = extractGoogleConferenceState(googleEvent);
+  if (state.google_conference_status === 'none') {
+    return {
+      google_meet_url: null,
+      google_conference_id: null,
+      google_conference_status: 'failed',
+    };
+  }
+
+  return state;
+}
+
+function extractGoogleConferenceState(googleEvent: any): GoogleConferenceState {
+  const conferenceData = googleEvent?.conferenceData;
+  if (!conferenceData) {
+    return {
+      google_meet_url: null,
+      google_conference_id: null,
+      google_conference_status: 'none',
+    };
+  }
+
+  const videoEntry = Array.isArray(conferenceData.entryPoints)
+    ? conferenceData.entryPoints.find((entryPoint: any) => {
+        return entryPoint?.entryPointType === 'video' && typeof entryPoint?.uri === 'string';
+      })
+    : null;
+  const meetUrl = videoEntry?.uri ?? null;
+  const conferenceId = typeof conferenceData.conferenceId === 'string' ? conferenceData.conferenceId : null;
+  const requestStatus = conferenceData.createRequest?.status?.statusCode;
+  const solutionType = conferenceData.conferenceSolution?.key?.type
+    ?? conferenceData.createRequest?.conferenceSolutionKey?.type
+    ?? null;
+  const isGoogleMeet = solutionType === 'hangoutsMeet'
+    || (typeof meetUrl === 'string' && meetUrl.includes('meet.google.com'));
+
+  if (!isGoogleMeet) {
+    return {
+      google_meet_url: null,
+      google_conference_id: null,
+      google_conference_status: 'none',
+    };
+  }
+
+  if (meetUrl && conferenceId) {
+    return {
+      google_meet_url: meetUrl,
+      google_conference_id: conferenceId,
+      google_conference_status: 'created',
+    };
+  }
+
+  if (requestStatus === 'pending') {
+    return {
+      google_meet_url: null,
+      google_conference_id: conferenceId,
+      google_conference_status: 'pending',
+    };
+  }
+
+  if (requestStatus === 'failure') {
+    return {
+      google_meet_url: null,
+      google_conference_id: conferenceId,
+      google_conference_status: 'failed',
+    };
+  }
+
+  return {
+    google_meet_url: null,
+    google_conference_id: conferenceId,
+    google_conference_status: 'failed',
+  };
 }
 
 async function getIntegration(businessId: number): Promise<GoogleIntegration | null> {
@@ -477,6 +758,29 @@ async function getIntegration(businessId: number): Promise<GoogleIntegration | n
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+async function isBusinessGoogleOperational(businessId: number): Promise<boolean> {
+  const { data, error } = await serviceClient
+    .from('business_subscriptions')
+    .select(`
+      status,
+      ends_at,
+      plan:plans(is_active, features)
+    `)
+    .eq('business_id', businessId)
+    .in('status', ['trialing', 'active'])
+    .gt('ends_at', new Date().toISOString())
+    .order('starts_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) return false;
+  if (!data) return false;
+
+  const plan = Array.isArray(data.plan) ? data.plan[0] : data.plan;
+  return Boolean(plan?.is_active && plan?.features?.google_calendar === true);
 }
 
 async function getValidAccessToken(integration: GoogleIntegration): Promise<string | null> {

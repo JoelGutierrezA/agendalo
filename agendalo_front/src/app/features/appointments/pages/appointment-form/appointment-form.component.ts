@@ -4,13 +4,16 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { BusinessService } from '../../../settings/services/business.service';
-import { AppointmentStatus, AppointmentsService } from '../../services/appointments.service';
+import { AppointmentStatus, AppointmentsService, ServiceModality } from '../../services/appointments.service';
+import { SubscriptionService } from '../../../subscription/services/subscription.service';
 
 interface Service {
   id: number;
   name: string;
   duration_minutes: number;
   price: number;
+  modality: ServiceModality;
+  generate_google_meet: boolean;
 }
 
 @Component({
@@ -33,6 +36,12 @@ interface Service {
         @if (loadingData) {
           <div class="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-2xl">
             <span class="text-text-secondary animate-pulse">Cargando datos...</span>
+          </div>
+        }
+
+        @if (!canOperate()) {
+          <div class="mb-4 p-3 bg-amber-50 text-amber-800 text-sm rounded-lg border border-amber-200">
+            Tu suscripcion esta en periodo de gracia. Puedes consultar datos, pero debes renovar para crear o editar citas.
           </div>
         }
 
@@ -129,7 +138,7 @@ interface Service {
 
           <div class="flex gap-3 justify-end pt-2 border-t border-border">
             <a routerLink="/app/agenda" class="btn-secondary">Cancelar</a>
-            <button type="submit" class="btn-primary" [disabled]="saving || loadingData">
+            <button type="submit" class="btn-primary" [disabled]="saving || loadingData || !canOperate()">
               @if (saving) { Guardando... } @else { {{ isEditing ? 'Actualizar cita' : 'Crear cita' }} }
             </button>
           </div>
@@ -158,7 +167,8 @@ export class AppointmentFormComponent implements OnInit {
     private router: Router,
     private businessService: BusinessService,
     private supabase: SupabaseService,
-    private appointmentsService: AppointmentsService
+    private appointmentsService: AppointmentsService,
+    private subscriptionService: SubscriptionService
   ) {
     this.generateTimeOptions();
     this.form = this.fb.group({
@@ -250,7 +260,7 @@ export class AppointmentFormComponent implements OnInit {
     try {
       let query = this.supabase.client
         .from('services')
-        .select('id, name, duration_minutes, price, is_active')
+        .select('id, name, duration_minutes, price, is_active, modality, generate_google_meet')
         .eq('business_id', business.id)
         .order('name');
 
@@ -264,6 +274,8 @@ export class AppointmentFormComponent implements OnInit {
         name: service.name,
         duration_minutes: Number(service.duration_minutes),
         price: Number(service.price ?? 0),
+        modality: service.modality === 'online' ? 'online' : 'presencial',
+        generate_google_meet: service.modality === 'online' && service.generate_google_meet === true,
       }));
 
       this.loadOpeningHours();
@@ -314,6 +326,11 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   async onSubmit(): Promise<void> {
+    if (!this.canOperate()) {
+      this.errorMessage = 'Tu suscripcion esta en periodo de gracia. Debes renovar para crear o editar citas.';
+      return;
+    }
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -351,6 +368,10 @@ export class AppointmentFormComponent implements OnInit {
     const serviceId = Number(this.form.get('service_id')?.value);
     const service = this.services.find((item) => item.id === serviceId);
     return service?.duration_minutes ?? 30;
+  }
+
+  canOperate(): boolean {
+    return this.subscriptionService.canOperate();
   }
 
   private toMinutes(time: string): number {

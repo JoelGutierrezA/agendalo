@@ -1,17 +1,17 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 import { BusinessService } from '../../features/settings/services/business.service';
 import { AuthService } from '../auth/auth.service';
 
 /**
  * Guard: verifica que el usuario tenga un negocio configurado.
- * Si no tiene negocio, redirige al onboarding.
+ * Si no tiene negocio, permite cargar /app para que el layout muestre
+ * el modal obligatorio de configuracion inicial.
  */
 export const businessSetupGuard: CanActivateFn = () => {
   const businessService = inject(BusinessService);
   const authService = inject(AuthService);
-  const router = inject(Router);
 
   const user = authService.currentUser();
 
@@ -27,9 +27,12 @@ export const businessSetupGuard: CanActivateFn = () => {
   if (user?.business_id) {
     return businessService.getBusiness().pipe(
       map(() => true),
-      catchError(() => of(router.createUrlTree(['/onboarding'])))
+      catchError(() => {
+        businessService.clearBusiness();
+        return of(true);
+      })
     );
   }
 
-  return router.createUrlTree(['/onboarding']);
+  return true;
 };
