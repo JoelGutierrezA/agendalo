@@ -1,12 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterModule } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { ToastService } from '../../../../core/services/toast.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { BusinessService } from '../../../settings/services/business.service';
 import { SubscriptionService } from '../../../subscription/services/subscription.service';
 import type { ServiceModality } from '../../../../models/auth.models';
+import { GoogleCalendarService, GoogleCalendarStatus } from '../../../settings/services/google-calendar.service';
 
 interface Service {
   id: number;
@@ -23,7 +26,7 @@ interface Service {
 @Component({
   selector: 'app-services-list',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, EmptyStateComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, EmptyStateComponent],
   template: `
     <div>
       <div class="page-header">
@@ -75,6 +78,19 @@ interface Service {
                     @if (service.description) {
                       <p class="text-text-secondary text-xs mt-0.5 line-clamp-1">{{ service.description }}</p>
                     }
+                    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span
+                        class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        [ngClass]="service.modality === 'online' ? 'bg-primary-light text-primary' : 'bg-gray-100 text-text-secondary'"
+                      >
+                        {{ service.modality === 'online' ? 'Online' : 'Presencial' }}
+                      </span>
+                      @if (service.modality === 'online' && service.generate_google_meet) {
+                        <span class="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          Google Meet
+                        </span>
+                      }
+                    </div>
                   </td>
                   <td class="px-5 py-3.5 hidden sm:table-cell text-text-secondary">
                     {{ service.duration_minutes }} min
@@ -177,6 +193,68 @@ interface Service {
               </div>
             </div>
 
+            <div>
+              <label class="form-label">Modalidad *</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label
+                  class="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors"
+                  [ngClass]="form.value.modality === 'presencial' ? 'border-primary bg-primary-light text-primary' : 'border-border text-text-primary hover:border-primary-light'"
+                >
+                  <input type="radio" formControlName="modality" value="presencial" class="h-4 w-4 accent-primary" />
+                  <span class="font-semibold">Presencial</span>
+                </label>
+                <label
+                  class="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors"
+                  [ngClass]="form.value.modality === 'online' ? 'border-primary bg-primary-light text-primary' : 'border-border text-text-primary hover:border-primary-light'"
+                >
+                  <input type="radio" formControlName="modality" value="online" class="h-4 w-4 accent-primary" />
+                  <span class="font-semibold">Online</span>
+                </label>
+              </div>
+            </div>
+
+            @if (isOnlineSelected()) {
+              <div class="rounded-lg border border-border bg-gray-50/60 p-3">
+                <label class="flex items-start gap-3 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    formControlName="generate_google_meet"
+                    class="mt-0.5 h-4 w-4 accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    [disabled]="googleStatusLoading || !googleConnected()"
+                  />
+                  <span>
+                    <span class="block font-semibold">Generar Google Meet automáticamente</span>
+                    @if (googleStatusLoading) {
+                      <span class="mt-1 block text-xs text-text-secondary">
+                        Consultando estado de Google Calendar...
+                      </span>
+                    } @else if (googleConnected()) {
+                      <span class="mt-1 block text-xs text-text-secondary">
+                        Skedia creará un enlace de Google Meet al agendar este servicio.
+                      </span>
+                    } @else {
+                      <span class="mt-1 block text-xs text-amber-700">
+                        Vincula tu cuenta de Google para generar reuniones de Meet automáticamente.
+                      </span>
+                      <a
+                        routerLink="/app/configuracion"
+                        [queryParams]="{ tab: 'calendar' }"
+                        class="mt-2 inline-flex text-xs font-semibold text-primary hover:underline"
+                      >
+                        Ir a Configuración
+                      </a>
+                    }
+                  </span>
+                </label>
+
+                @if (!form.value.generate_google_meet) {
+                  <p class="mt-3 text-xs text-text-secondary">
+                    Recuerda compartir con tu cliente el enlace de la videollamada antes de la sesión.
+                  </p>
+                }
+              </div>
+            }
+
             <label class="flex items-center gap-3 text-sm text-text-primary cursor-pointer">
               <input type="checkbox" formControlName="is_active" class="w-4 h-4 accent-primary" />
               Servicio activo
@@ -217,13 +295,16 @@ interface Service {
     }
   `,
 })
-export class ServicesListComponent implements OnInit {
+export class ServicesListComponent implements OnInit, OnDestroy {
   services: Service[] = [];
   loading = true;
   showModal = false;
   editingId: number | null = null;
   deletingService: Service | null = null;
   submitting = false;
+  googleStatus: GoogleCalendarStatus | null = null;
+  googleStatusLoading = false;
+  private googleStatusSubscription?: Subscription;
 
   form: FormGroup;
 
@@ -232,19 +313,33 @@ export class ServicesListComponent implements OnInit {
     private toastService: ToastService,
     private businessService: BusinessService,
     private supabase: SupabaseService,
-    private subscriptionService: SubscriptionService
+    private subscriptionService: SubscriptionService,
+    private googleCalendarService: GoogleCalendarService
   ) {
     this.form = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(255)]],
       description: [''],
       duration_minutes: [30, [Validators.required, Validators.min(5), Validators.max(480)]],
       price: [0, [Validators.required, Validators.min(0)]],
+      modality: ['presencial', Validators.required],
+      generate_google_meet: [false],
       is_active: [true],
+    });
+
+    this.form.get('modality')?.valueChanges.subscribe((modality) => {
+      if (modality === 'presencial') {
+        this.form.patchValue({ generate_google_meet: false }, { emitEvent: false });
+      }
     });
   }
 
   ngOnInit(): void {
+    this.loadGoogleStatus();
     this.loadServices();
+  }
+
+  ngOnDestroy(): void {
+    this.googleStatusSubscription?.unsubscribe();
   }
 
   loadServices(): void {
@@ -284,6 +379,8 @@ export class ServicesListComponent implements OnInit {
       description: service?.description ?? '',
       duration_minutes: service?.duration_minutes ?? 30,
       price: service?.price ?? 0,
+      modality: service?.modality ?? 'presencial',
+      generate_google_meet: service?.modality === 'online' && service.generate_google_meet === true,
       is_active: service?.is_active ?? true,
     });
     this.showModal = true;
@@ -309,14 +406,18 @@ export class ServicesListComponent implements OnInit {
     }
 
     this.submitting = true;
+    const values = this.form.getRawValue();
+    const modality: ServiceModality = values.modality === 'online' ? 'online' : 'presencial';
 
     const payload = {
       business_id: business.id,
-      name: this.form.value.name,
-      description: this.form.value.description || null,
-      duration_minutes: Number(this.form.value.duration_minutes),
-      price: Number(this.form.value.price),
-      is_active: Boolean(this.form.value.is_active),
+      name: values.name,
+      description: values.description || null,
+      duration_minutes: Number(values.duration_minutes),
+      price: Number(values.price),
+      modality,
+      generate_google_meet: modality === 'online' && values.generate_google_meet === true,
+      is_active: Boolean(values.is_active),
     };
 
     const request = this.editingId
@@ -410,6 +511,28 @@ export class ServicesListComponent implements OnInit {
 
   canOperate(): boolean {
     return this.subscriptionService.canOperate();
+  }
+
+  isOnlineSelected(): boolean {
+    return this.form.value.modality === 'online';
+  }
+
+  googleConnected(): boolean {
+    return this.googleStatus?.connected === true;
+  }
+
+  private loadGoogleStatus(): void {
+    this.googleStatusLoading = true;
+    this.googleStatusSubscription = this.googleCalendarService.getStatus().subscribe({
+      next: (status) => {
+        this.googleStatus = status;
+        this.googleStatusLoading = false;
+      },
+      error: () => {
+        this.googleStatus = null;
+        this.googleStatusLoading = false;
+      },
+    });
   }
 
   private assertOperationAllowed(): boolean {
