@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     if (req.method === 'GET' && url.pathname.endsWith('/auth')) {
       const token = url.searchParams.get('token') ?? '';
       const context = await getUserContext(token);
-      await assertGoogleOperationalForUser(context);
+      await assertGoogleConnectableForUser(context);
       return redirect(await getAuthUrl(context.businessId, context.userId));
     }
 
@@ -114,16 +114,17 @@ Deno.serve(async (req) => {
       case 'status':
         return json({ data: await getStatus(context.businessId) });
       case 'auth-url':
-        await assertGoogleOperationalForUser(context);
+        await assertGoogleConnectableForUser(context);
         return json({ data: { auth_url: await getAuthUrl(context.businessId, context.userId) } });
       case 'disconnect':
         await disconnect(context.businessId);
         return json({ data: { connected: false } });
       case 'sync-appointment':
+        await assertGoogleOperableForUser(context);
         await syncAppointment(Number(body.appointment_id), true, context.businessId);
         return json({ data: true });
       case 'list-events':
-        await assertGoogleOperationalForUser(context);
+        await assertGoogleOperableForUser(context);
         return json({
           data: await listGoogleEvents(
             context.businessId,
@@ -207,7 +208,7 @@ async function assertBusinessBelongsToUser(businessId: number, userId: string): 
   }
 }
 
-async function assertGoogleOperationalForUser(context: UserContext): Promise<void> {
+async function assertGoogleConnectableForUser(context: UserContext): Promise<void> {
   const { data: profile, error: profileError } = await serviceClient
     .from('profiles')
     .select('id, business_id, is_active')
@@ -221,13 +222,22 @@ async function assertGoogleOperationalForUser(context: UserContext): Promise<voi
 
   await assertBusinessBelongsToUser(context.businessId, context.userId);
 
-  if (!await isBusinessGoogleOperational(context.businessId)) {
+  if (!await isBusinessGoogleConnectable(context.businessId)) {
     throw new Error('Google Calendar no esta disponible para este negocio en este momento.');
   }
 }
 
-async function assertGoogleOperationalForOAuthState(userId: string, businessId: number): Promise<void> {
-  await assertGoogleOperationalForUser({ userId, businessId });
+async function assertGoogleConnectableForOAuthState(userId: string, businessId: number): Promise<void> {
+  await assertGoogleConnectableForUser({ userId, businessId });
+}
+
+async function assertGoogleOperableForUser(context: UserContext): Promise<void> {
+  await assertGoogleConnectableForUser(context);
+
+  const integration = await getIntegration(context.businessId);
+  if (!integration) {
+    throw new Error('Google Calendar no esta conectado para este negocio.');
+  }
 }
 
 async function getStatus(businessId: number) {
@@ -309,7 +319,7 @@ async function handleCallback(url: URL): Promise<Response> {
     }
 
     await serviceClient.from('google_oauth_states').delete().eq('state', state);
-    await assertGoogleOperationalForOAuthState(String(stateRow.user_id), Number(stateRow.business_id));
+    await assertGoogleConnectableForOAuthState(String(stateRow.user_id), Number(stateRow.business_id));
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -760,7 +770,7 @@ async function getIntegration(businessId: number): Promise<GoogleIntegration | n
   return data;
 }
 
-async function isBusinessGoogleOperational(businessId: number): Promise<boolean> {
+async function isBusinessGoogleConnectable(businessId: number): Promise<boolean> {
   const { data, error } = await serviceClient
     .from('business_subscriptions')
     .select(`
@@ -781,6 +791,11 @@ async function isBusinessGoogleOperational(businessId: number): Promise<boolean>
 
   const plan = Array.isArray(data.plan) ? data.plan[0] : data.plan;
   return Boolean(plan?.is_active && plan?.features?.google_calendar === true);
+}
+
+async function isBusinessGoogleOperational(businessId: number): Promise<boolean> {
+  if (!await isBusinessGoogleConnectable(businessId)) return false;
+  return Boolean(await getIntegration(businessId));
 }
 
 async function getValidAccessToken(integration: GoogleIntegration): Promise<string | null> {
