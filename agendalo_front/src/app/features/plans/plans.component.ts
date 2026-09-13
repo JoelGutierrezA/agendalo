@@ -83,6 +83,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
 
                 <a
                   routerLink="/registro"
+                  [queryParams]="{ plan: plan.code }"
                   class="relative mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
                   [ngClass]="{
                     'bg-surface text-text-primary border border-border hover:bg-gray-50 focus:ring-primary': plan.tone === 'basic',
@@ -137,6 +138,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
 export class PlansComponent {
   plans = [
     {
+      code: 'trial',
       name: '14 dias gratis',
       description: 'Prueba Skedia completo antes de elegir un plan mensual.',
       price: '$0',
@@ -154,6 +156,7 @@ export class PlansComponent {
       ],
     },
     {
+      code: 'agenda',
       name: 'Agenda',
       description: 'Ordena reservas, servicios y clientes en una sola plataforma.',
       price: '$9.990',
@@ -172,6 +175,7 @@ export class PlansComponent {
       ],
     },
     {
+      code: 'premium',
       name: 'Premium',
       description: 'Suma balances, egresos, insumos e inventario para controlar tu operacion.',
       price: '$19.990',

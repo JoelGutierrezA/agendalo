@@ -93,11 +93,12 @@ export class SubscriptionService {
   ) {}
 
   ensureLoaded(): Observable<BusinessSubscription | null> {
-    const businessId = this.businessService.currentBusiness()?.id ?? null;
+    const user = this.authService.currentUser();
+    const businessId = this.currentProfileBusinessId();
 
-    if (!businessId || this.authService.currentUser()?.role === 'admin_platform') {
+    if (!businessId || user?.role === 'admin_platform') {
       this.currentSubscription.set(null);
-      this.loadedBusinessId = businessId;
+      this.loadedBusinessId = null;
       return of(null);
     }
 
@@ -110,9 +111,10 @@ export class SubscriptionService {
 
   loadCurrent(): Observable<BusinessSubscription | null> {
     return defer(async () => {
-      const businessId = this.businessService.currentBusiness()?.id;
+      const user = this.authService.currentUser();
+      const businessId = this.currentProfileBusinessId();
 
-      if (!businessId || this.authService.currentUser()?.role === 'admin_platform') {
+      if (!businessId || user?.role === 'admin_platform') {
         return null;
       }
 
@@ -139,7 +141,7 @@ export class SubscriptionService {
     }).pipe(
       tap(subscription => {
         this.currentSubscription.set(subscription);
-        this.loadedBusinessId = this.businessService.currentBusiness()?.id ?? null;
+        this.loadedBusinessId = this.currentProfileBusinessId();
       }),
       finalize(() => this.loading.set(false))
     );
@@ -441,6 +443,14 @@ export class SubscriptionService {
   private canViewPlanFeatures(subscription: BusinessSubscription | null): boolean {
     const state = this.effectiveState(subscription);
     return state === 'active' || state === 'grace';
+  }
+
+  private currentProfileBusinessId(): number | null {
+    const userBusinessId = this.authService.currentUser()?.business_id ?? null;
+    const currentBusinessId = this.businessService.currentBusiness()?.id ?? null;
+
+    if (!userBusinessId || !currentBusinessId) return null;
+    return Number(userBusinessId) === Number(currentBusinessId) ? Number(currentBusinessId) : null;
   }
 
   private gracePeriodEndsAt(subscription: BusinessSubscription | null): Date | null {

@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { RegistrationPlanCode } from '../../../../models/auth.models';
 import { PublicFooterComponent } from '../../../../shared/components/public-footer/public-footer.component';
 
 @Component({
@@ -30,7 +31,7 @@ import { PublicFooterComponent } from '../../../../shared/components/public-foot
       </header>
 
       <main class="flex-1 bg-gradient-to-br from-primary-light via-white to-blue-50 flex items-center justify-center p-4">
-        <div class="w-full max-w-md py-10">
+        <div class="w-full max-w-3xl py-10">
           <div class="text-center mb-8">
             <div class="flex justify-center h-12 mb-4">
               <img src="assets/Skedia%20Fondo%20Blanco.png" alt="Skedia" class="h-full w-auto object-contain">
@@ -50,7 +51,7 @@ import { PublicFooterComponent } from '../../../../shared/components/public-foot
               </div>
               <h2 class="text-xl font-bold text-text-primary">Solicitud enviada</h2>
               <p class="mt-3 text-sm leading-6 text-text-secondary">
-                Tu cuenta esta pendiente de aprobacion. Podras ingresar a Skedia una vez que tu solicitud sea aprobada.
+                Hemos recibido tu solicitud de acceso a Skedia. Te informaremos por correo cuando haya novedades.
               </p>
               <a routerLink="/login" class="btn-primary mt-6 w-full justify-center py-2.5">
                 Ir a iniciar sesion
@@ -113,6 +114,49 @@ import { PublicFooterComponent } from '../../../../shared/components/public-foot
                   }
                 </div>
 
+                <div>
+                  <label class="form-label">Plan</label>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" role="radiogroup" aria-label="Plan de registro">
+                    @for (plan of planOptions; track plan.code) {
+                      <label
+                        class="relative cursor-pointer rounded-lg border bg-white p-3 transition-all"
+                        [ngClass]="selectedPlanCode === plan.code
+                          ? 'border-primary bg-primary-light shadow-card'
+                          : 'border-border hover:border-primary/60 hover:bg-slate-50'"
+                      >
+                        <input
+                          type="radio"
+                          class="sr-only"
+                          formControlName="requested_plan_code"
+                          [value]="plan.code"
+                        />
+                        <span class="flex items-start justify-between gap-2">
+                          <span>
+                            <span class="block text-xs font-bold uppercase tracking-wider text-text-secondary">{{ plan.kicker }}</span>
+                            <span class="mt-1 block text-base font-bold text-slate-900">{{ plan.title }}</span>
+                            <span class="mt-1 block text-sm font-semibold text-primary">{{ plan.price }}</span>
+                          </span>
+                          <span
+                            class="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold"
+                            [ngClass]="selectedPlanCode === plan.code
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-slate-300 text-transparent'"
+                            aria-hidden="true"
+                          >
+                            <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.2 7.26a1 1 0 0 1-1.42.001L3.29 9.124a1 1 0 0 1 1.42-1.408l4.09 4.122 6.49-6.542a1 1 0 0 1 1.414-.006Z" clip-rule="evenodd" />
+                            </svg>
+                          </span>
+                        </span>
+                        <span class="mt-2 block text-xs leading-5 text-text-secondary">{{ plan.description }}</span>
+                      </label>
+                    }
+                  </div>
+                  @if (form.get('requested_plan_code')?.invalid && form.get('requested_plan_code')?.touched) {
+                    <p class="form-error">Selecciona un plan para continuar</p>
+                  }
+                </div>
+
                 <button
                   type="submit"
                   class="btn-primary w-full justify-center py-2.5"
@@ -144,17 +188,54 @@ export class RegisterComponent {
   loading = false;
   showPassword = false;
   submitted = false;
+  readonly planOptions: Array<{
+    code: RegistrationPlanCode;
+    kicker: string;
+    title: string;
+    price: string;
+    description: string;
+  }> = [
+    {
+      code: 'trial',
+      kicker: 'Prueba gratis',
+      title: '14 dias',
+      price: '$0',
+      description: 'Prueba todas las funciones de Skedia.',
+    },
+    {
+      code: 'agenda',
+      kicker: 'Agenda',
+      title: 'Agenda',
+      price: '$9.990 / mes',
+      description: 'Reservas, clientes, servicios y Google Calendar.',
+    },
+    {
+      code: 'premium',
+      kicker: 'Premium',
+      title: 'Premium',
+      price: '$19.990 / mes',
+      description: 'Agenda mas ingresos, egresos, balance e insumos.',
+    },
+  ];
 
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private route: ActivatedRoute
   ) {
+    const initialPlan = this.normalizePlanCode(this.route.snapshot.queryParamMap.get('plan'));
+
     this.form = this.fb.group({
       name: ['', [Validators.required, Validators.minLength(2)]],
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(8)]],
+      requested_plan_code: [initialPlan ?? '', [Validators.required]],
     });
+  }
+
+  get selectedPlanCode(): RegistrationPlanCode | null {
+    return this.normalizePlanCode(this.form.get('requested_plan_code')?.value);
   }
 
   onSubmit(): void {
@@ -167,7 +248,14 @@ export class RegisterComponent {
       name: string;
       email: string;
       password: string;
+      requested_plan_code: RegistrationPlanCode;
     };
+    const requestedPlanCode = this.selectedPlanCode;
+
+    if (!requestedPlanCode) {
+      this.form.get('requested_plan_code')?.markAsTouched();
+      return;
+    }
 
     this.loading = true;
 
@@ -176,6 +264,7 @@ export class RegisterComponent {
       email,
       password,
       password_confirmation: password,
+      requested_plan_code: requestedPlanCode,
     }).subscribe({
       next: () => {
         this.submitted = true;
@@ -189,5 +278,15 @@ export class RegisterComponent {
         this.loading = false;
       },
     });
+  }
+
+  private normalizePlanCode(value: unknown): RegistrationPlanCode | null {
+    const normalized = String(value ?? '').trim().toLowerCase();
+
+    if (normalized === 'trial' || normalized === 'agenda' || normalized === 'premium') {
+      return normalized;
+    }
+
+    return null;
   }
 }

@@ -12,7 +12,7 @@ import { PlatformService } from '../../services/platform.service';
   standalone: true,
   imports: [CommonModule, RouterLink, EmptyStateComponent],
   template: `
-    <div class="space-y-6 max-w-[1400px] mx-auto p-6">
+    <div class="space-y-5 max-w-[1400px] mx-auto p-4 sm:p-6">
       <div class="page-header">
         <div>
           <div class="flex items-center gap-3">
@@ -24,48 +24,60 @@ import { PlatformService } from '../../services/platform.service';
       </div>
 
       <div class="card p-0 overflow-hidden">
-        <div class="overflow-x-auto text-sm">
-          <table class="w-full min-w-[1220px] text-left border-collapse">
+        <div class="hidden md:block text-sm">
+          <table class="w-full table-fixed text-left border-collapse">
             <thead>
               <tr class="bg-gray-50 border-b border-border">
-                <th class="p-4 w-[230px] font-bold uppercase text-text-secondary tracking-wider">Usuario</th>
-                <th class="p-4 w-[280px] font-bold uppercase text-text-secondary tracking-wider">Email</th>
-                <th class="p-4 w-[85px] font-bold uppercase text-text-secondary tracking-wider">Rol</th>
-                <th class="p-4 w-[115px] font-bold uppercase text-text-secondary tracking-wider">Estado</th>
-                <th class="p-4 w-[140px] font-bold uppercase text-text-secondary tracking-wider">Plan</th>
-                <th class="p-4 w-[135px] font-bold uppercase text-text-secondary tracking-wider whitespace-nowrap">Dias restantes</th>
-                <th class="p-4 w-[190px] font-bold uppercase text-text-secondary tracking-wider text-right">Acciones</th>
+                <th class="px-4 py-3 w-[36%] font-bold uppercase text-text-secondary tracking-wider">Usuario</th>
+                <th class="px-4 py-3 w-[18%] font-bold uppercase text-text-secondary tracking-wider">Plan</th>
+                <th class="px-4 py-3 w-[16%] font-bold uppercase text-text-secondary tracking-wider">Estado</th>
+                <th class="px-4 py-3 w-[14%] font-bold uppercase text-text-secondary tracking-wider whitespace-nowrap">Dias</th>
+                <th class="px-4 py-3 w-[16%] font-bold uppercase text-text-secondary tracking-wider text-right">Acciones</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-border">
               @if (loading) {
                 @for (i of [1,2,3,4,5]; track i) {
                   <tr>
-                    <td class="p-4"><div class="skeleton-text w-32 h-4"></div><div class="skeleton-text w-16 h-2 mt-2"></div></td>
-                    <td class="p-4"><div class="skeleton-text w-48 h-4"></div></td>
-                    <td class="p-4"><div class="skeleton w-16 h-6 rounded-lg"></div></td>
-                    <td class="p-4"><div class="skeleton w-20 h-6 rounded-lg"></div></td>
-                    <td class="p-4"><div class="skeleton w-24 h-6 rounded-lg"></div></td>
-                    <td class="p-4"><div class="skeleton-text w-20 h-4"></div></td>
-                    <td class="p-4 text-right"><div class="skeleton w-24 h-10 rounded-xl ml-auto"></div></td>
+                    <td class="px-4 py-3"><div class="skeleton-text w-32 h-4"></div><div class="skeleton-text w-48 h-3 mt-2"></div></td>
+                    <td class="px-4 py-3"><div class="skeleton w-24 h-6 rounded-lg"></div></td>
+                    <td class="px-4 py-3"><div class="skeleton w-20 h-6 rounded-lg"></div></td>
+                    <td class="px-4 py-3"><div class="skeleton-text w-20 h-4"></div></td>
+                    <td class="px-4 py-3 text-right"><div class="skeleton w-28 h-9 rounded-lg ml-auto"></div></td>
                   </tr>
                 }
               } @else {
                 @for (user of users; track user.id) {
                   <tr class="hover:bg-gray-50/50 transition-colors fade-in">
-                    <td class="p-4">
-                      <div class="font-bold text-text-primary">{{ user.name }}</div>
+                    <td class="px-4 py-3">
+                      <div class="min-w-0">
+                        <p class="font-bold text-text-primary truncate">{{ user.name }}</p>
+                        <p class="mt-0.5 text-xs font-medium text-text-secondary truncate">{{ user.email }}</p>
+                        <span
+                          class="mt-1 inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight"
+                          [class]="user.role === 'admin_platform' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'"
+                        >
+                          {{ user.role === 'admin_platform' ? 'Admin' : 'Dueno' }}
+                        </span>
+                      </div>
                     </td>
-                    <td class="p-4 text-text-secondary font-medium">{{ user.email }}</td>
-                    <td class="p-4">
+                    <td class="hidden">
                       <span
                         class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight"
                         [class]="user.role === 'admin_platform' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'"
                       >
-                        {{ user.role === 'admin_platform' ? 'Admin' : 'Dueño' }}
+                        {{ user.role === 'admin_platform' ? 'Admin' : 'Dueno' }}
                       </span>
                     </td>
-                    <td class="p-4 text-xs font-semibold">
+                    <td class="px-4 py-3 text-xs font-semibold">
+                      <span
+                        class="inline-flex items-center px-2 py-1 rounded-lg whitespace-nowrap"
+                        [class]="planClass(user)"
+                      >
+                        {{ planLabel(user) }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-xs font-semibold">
                       <span
                         class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
                         [class]="statusClass(user)"
@@ -74,23 +86,15 @@ import { PlatformService } from '../../services/platform.service';
                         {{ statusLabel(user) }}
                       </span>
                     </td>
-                    <td class="p-4 text-xs font-semibold">
-                      <span
-                        class="inline-flex items-center px-2 py-1 rounded-lg whitespace-nowrap"
-                        [class]="planClass(user)"
-                      >
-                        {{ planLabel(user) }}
-                      </span>
-                    </td>
-                    <td class="p-4 text-text-secondary font-medium whitespace-nowrap">
+                    <td class="px-4 py-3 text-text-secondary font-medium whitespace-nowrap">
                       {{ daysRemainingLabel(user) }}
                     </td>
-                    <td class="p-4 text-right whitespace-nowrap">
-                      <div class="inline-flex flex-nowrap justify-end gap-2">
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                      <div class="inline-flex flex-nowrap justify-end gap-1.5">
                         <button
                           type="button"
                           (click)="openUserModal(user)"
-                          class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border text-blue-700 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
+                          class="inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all border text-blue-700 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
                           aria-label="Ver usuario"
                           title="Ver"
                         >
@@ -105,7 +109,7 @@ import { PlatformService } from '../../services/platform.service';
                             <button
                               type="button"
                               (click)="approveUser(user)"
-                              class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                              class="inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all border text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed"
                               [disabled]="updatingUserId === user.id || deletingUserId === user.id"
                               aria-label="Aceptar usuario"
                               title="Aceptar"
@@ -122,7 +126,7 @@ import { PlatformService } from '../../services/platform.service';
                             <button
                               type="button"
                               (click)="toggleStatus(user)"
-                              class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
+                              class="inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all border disabled:opacity-50 disabled:cursor-not-allowed"
                               [disabled]="updatingUserId === user.id || deletingUserId === user.id"
                               [attr.aria-label]="user.is_active ? 'Dar de baja usuario' : 'Dar de alta usuario'"
                               [title]="user.is_active ? 'Dar de baja' : 'Dar de alta'"
@@ -143,7 +147,7 @@ import { PlatformService } from '../../services/platform.service';
                           <button
                             type="button"
                             (click)="deleteUser(user)"
-                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-all border text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all border text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
                             [disabled]="updatingUserId === user.id || deletingUserId === user.id"
                             [attr.aria-label]="isPendingUser(user) ? 'Rechazar usuario' : 'Eliminar usuario'"
                             [title]="isPendingUser(user) ? 'Rechazar' : 'Eliminar'"
@@ -168,6 +172,123 @@ import { PlatformService } from '../../services/platform.service';
               }
             </tbody>
           </table>
+        </div>
+
+        <div class="md:hidden divide-y divide-border">
+          @if (loading) {
+            @for (i of [1,2,3,4,5]; track i) {
+              <div class="p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="skeleton-text w-28 h-4"></div>
+                    <div class="skeleton-text w-44 h-3 mt-2"></div>
+                  </div>
+                  <div class="skeleton w-20 h-6 rounded-lg"></div>
+                </div>
+                <div class="mt-3 flex items-center justify-between gap-3">
+                  <div class="skeleton-text w-32 h-4"></div>
+                  <div class="skeleton w-28 h-9 rounded-lg"></div>
+                </div>
+              </div>
+            }
+          } @else {
+            @for (user of users; track user.id) {
+              <article class="p-4 fade-in">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="font-bold text-text-primary truncate">{{ user.name }}</p>
+                    <p class="mt-0.5 text-sm text-text-secondary truncate">{{ user.email }}</p>
+                  </div>
+                  <span class="inline-flex flex-shrink-0 items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold" [class]="statusClass(user)">
+                    <span class="w-2 h-2 rounded-full" [class]="statusDotClass(user)"></span>
+                    {{ statusLabel(user) }}
+                  </span>
+                </div>
+
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
+                  <span class="inline-flex items-center px-2 py-1 rounded-lg" [class]="planClass(user)">{{ planLabel(user) }}</span>
+                  <span>{{ daysRemainingLabel(user) }}</span>
+                  <span>{{ user.role === 'admin_platform' ? 'Admin' : 'Dueno' }}</span>
+                </div>
+
+                <div class="mt-3 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    (click)="openUserModal(user)"
+                    class="btn-secondary btn-sm min-h-10 flex-1 justify-center"
+                  >
+                    Ver detalle
+                  </button>
+
+                  <div class="inline-flex flex-shrink-0 gap-1.5">
+                    @if (user.role !== 'admin_platform') {
+                      @if (isPendingUser(user)) {
+                        <button
+                          type="button"
+                          (click)="approveUser(user)"
+                          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          [disabled]="updatingUserId === user.id || deletingUserId === user.id"
+                          aria-label="Aceptar usuario"
+                          title="Aceptar"
+                        >
+                          @if (updatingUserId === user.id) {
+                            <span class="h-4 w-4 rounded-full border-2 border-green-200 border-t-green-700 animate-spin" aria-hidden="true"></span>
+                          } @else {
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5"></path>
+                            </svg>
+                          }
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          (click)="toggleStatus(user)"
+                          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed"
+                          [disabled]="updatingUserId === user.id || deletingUserId === user.id"
+                          [attr.aria-label]="user.is_active ? 'Dar de baja usuario' : 'Dar de alta usuario'"
+                          [title]="user.is_active ? 'Dar de baja' : 'Dar de alta'"
+                          [class]="user.is_active ? 'text-red-600 border-red-200 hover:bg-red-50' : 'text-green-600 border-green-200 hover:bg-green-50'"
+                        >
+                          @if (user.is_active) {
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <path d="M12 2v10"></path>
+                              <path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>
+                            </svg>
+                          } @else {
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5"></path>
+                            </svg>
+                          }
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        (click)="deleteUser(user)"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        [disabled]="updatingUserId === user.id || deletingUserId === user.id"
+                        [attr.aria-label]="isPendingUser(user) ? 'Rechazar usuario' : 'Eliminar usuario'"
+                        [title]="isPendingUser(user) ? 'Rechazar' : 'Eliminar'"
+                      >
+                        @if (deletingUserId === user.id) {
+                          <span class="h-4 w-4 rounded-full border-2 border-red-200 border-t-red-700 animate-spin" aria-hidden="true"></span>
+                        } @else {
+                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6h18"></path>
+                            <path d="M8 6V4h8v2"></path>
+                            <path d="M19 6l-1 14H6L5 6"></path>
+                            <path d="M10 11v5"></path>
+                            <path d="M14 11v5"></path>
+                          </svg>
+                        }
+                      </button>
+                    }
+                  </div>
+                </div>
+              </article>
+            }
+          }
+        </div>
+
           @if (users.length === 0 && !loading) {
             <app-empty-state
               icon="users"
@@ -175,7 +296,6 @@ import { PlatformService } from '../../services/platform.service';
               description="Aun no hay usuarios registrados en la plataforma."
             ></app-empty-state>
           }
-        </div>
 
         <div class="p-4 border-t border-border flex justify-between items-center bg-gray-50/30">
           <span class="text-xs font-medium text-text-secondary">Pagina {{ currentPage }} de {{ lastPage }}</span>
@@ -187,7 +307,7 @@ import { PlatformService } from '../../services/platform.service';
       </div>
 
       @if (selectedUser) {
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <div class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
           <button
             type="button"
             class="absolute inset-0"
@@ -195,14 +315,14 @@ import { PlatformService } from '../../services/platform.service';
             (click)="closeUserModal()"
           ></button>
 
-          <section class="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <header class="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+          <section class="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-3xl sm:rounded-2xl">
+            <header class="flex items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-5">
               <div class="min-w-0">
-                <h2 class="text-2xl font-bold text-text-primary truncate">{{ selectedUser.name }}</h2>
+                <h2 class="text-lg font-bold text-text-primary">Detalle del usuario</h2>
               </div>
               <button
                 type="button"
-                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-text-secondary transition-colors hover:bg-gray-50 hover:text-text-primary"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:bg-gray-50 hover:text-text-primary"
                 aria-label="Cerrar"
                 title="Cerrar"
                 (click)="closeUserModal()"
@@ -214,20 +334,20 @@ import { PlatformService } from '../../services/platform.service';
               </button>
             </header>
 
-            <div class="bg-slate-100 px-6 pt-5">
-              <div class="flex items-end gap-3">
+            <div class="border-b border-border bg-slate-50 px-4 pt-2 sm:px-5">
+              <div class="flex items-end gap-2">
                 <button
                   type="button"
-                  class="relative h-12 min-w-[132px] px-5 rounded-t-2xl border border-b-0 text-sm font-bold transition-all duration-200"
-                  [class]="activeDetailTab === 'user' ? 'bg-white border-border text-primary shadow-sm translate-y-px' : 'bg-amber-300 border-amber-300 text-amber-950 hover:bg-amber-200'"
+                  class="relative h-11 min-w-[110px] px-4 rounded-t-lg border border-b-0 text-sm font-bold transition-all duration-200"
+                  [class]="activeDetailTab === 'user' ? 'bg-white border-border text-primary shadow-sm translate-y-px' : 'bg-transparent border-transparent text-text-secondary hover:text-text-primary'"
                   (click)="activeDetailTab = 'user'"
                 >
                   Usuario
                 </button>
                 <button
                   type="button"
-                  class="relative h-12 min-w-[132px] px-5 rounded-t-2xl border border-b-0 text-sm font-bold transition-all duration-200"
-                  [class]="activeDetailTab === 'business' ? 'bg-white border-border text-primary shadow-sm translate-y-px' : 'bg-sky-500 border-sky-500 text-white hover:bg-sky-400'"
+                  class="relative h-11 min-w-[110px] px-4 rounded-t-lg border border-b-0 text-sm font-bold transition-all duration-200"
+                  [class]="activeDetailTab === 'business' ? 'bg-white border-border text-primary shadow-sm translate-y-px' : 'bg-transparent border-transparent text-text-secondary hover:text-text-primary'"
                   (click)="activeDetailTab = 'business'"
                 >
                   Negocio
@@ -235,22 +355,23 @@ import { PlatformService } from '../../services/platform.service';
               </div>
             </div>
 
-            <div class="max-h-[62vh] overflow-y-auto border-t border-border bg-white p-6">
+            <div class="min-h-0 flex-1 overflow-y-auto bg-white p-4 sm:p-5">
               @if (activeDetailTab === 'user') {
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div class="rounded-lg border border-border p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <p class="text-xs font-bold uppercase tracking-wider text-text-secondary sm:col-span-2">Datos del usuario</p>
+                  <div class="border-b border-border pb-3">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Nombre</p>
                     <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.name || '-' }}</p>
                   </div>
-                  <div class="rounded-lg border border-border p-4">
+                  <div class="border-b border-border pb-3">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Email de cuenta</p>
                     <p class="mt-1 font-semibold text-text-primary break-all">{{ selectedUser.email || '-' }}</p>
                   </div>
-                  <div class="rounded-lg border border-border p-4">
+                  <div class="border-b border-border pb-3">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Rol</p>
-                    <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.role === 'admin_platform' ? 'Admin' : 'Dueño' }}</p>
+                    <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.role === 'admin_platform' ? 'Admin' : 'Dueno' }}</p>
                   </div>
-                  <div class="rounded-lg border border-border p-4">
+                  <div class="border-b border-border pb-3">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Estado</p>
                     <span class="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold" [class]="statusClass(selectedUser)">
                       <span class="w-2 h-2 rounded-full" [class]="statusDotClass(selectedUser)"></span>
@@ -258,11 +379,11 @@ import { PlatformService } from '../../services/platform.service';
                     </span>
                   </div>
                   @if (canManageSubscription(selectedUser)) {
-                    <div class="rounded-lg border border-border bg-gray-50/60 p-4 sm:col-span-2">
+                    <div class="border-t border-border pt-4 sm:col-span-2">
                       <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Gestion de suscripcion</p>
-                          <p class="mt-1 text-sm text-text-secondary">Administra planes, vencimientos y dias manuales.</p>
+                          <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Suscripcion</p>
+                          <p class="mt-1 text-sm text-text-secondary">Resumen y acciones manuales.</p>
                         </div>
                         @if (updatingSubscriptionUserId === selectedUser.id) {
                           <span class="inline-flex items-center gap-2 text-sm font-semibold text-primary">
@@ -272,33 +393,34 @@ import { PlatformService } from '../../services/platform.service';
                         }
                       </div>
 
-                      <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                        <div class="rounded-lg border border-border bg-white p-3">
+                      <div class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-gray-50 p-3 sm:grid-cols-5">
+                        <div>
                           <p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Plan actual</p>
                           <p class="mt-1 text-sm font-bold text-text-primary">{{ currentPlanLabel(selectedUser) }}</p>
                         </div>
-                        <div class="rounded-lg border border-border bg-white p-3">
+                        <div>
                           <p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Estado</p>
                           <span class="mt-2 inline-flex items-center px-2 py-1 rounded-lg text-xs font-semibold" [class]="subscriptionStatusClass(selectedUser)">
                             {{ subscriptionStatusLabel(selectedUser) }}
                           </span>
                         </div>
-                        <div class="rounded-lg border border-border bg-white p-3">
+                        <div>
                           <p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Inicio</p>
                           <p class="mt-1 text-sm font-semibold text-text-primary">{{ formatDate(selectedUser.subscription?.starts_at) }}</p>
                         </div>
-                        <div class="rounded-lg border border-border bg-white p-3">
+                        <div>
                           <p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Vencimiento</p>
                           <p class="mt-1 text-sm font-semibold text-text-primary">{{ formatDate(selectedUser.subscription?.ends_at) }}</p>
                         </div>
-                        <div class="rounded-lg border border-border bg-white p-3">
+                        <div>
                           <p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Dias restantes</p>
                           <p class="mt-1 text-sm font-bold text-text-primary">{{ daysRemainingLabel(selectedUser) }}</p>
                         </div>
                       </div>
 
                       @if (selectedUser.subscription) {
-                        <div class="mt-4 rounded-lg border border-border bg-white p-3">
+                        @if (!isActiveSubscription(selectedUser)) {
+                        <div class="mt-3">
                           <label class="text-xs font-bold uppercase tracking-wider text-text-secondary" [attr.for]="'custom-days-' + selectedUser.id">Dias personalizados</label>
                           <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                             <input
@@ -307,7 +429,7 @@ import { PlatformService } from '../../services/platform.service';
                               inputmode="numeric"
                               min="1"
                               step="1"
-                              class="input-field h-10 sm:max-w-[180px]"
+                              class="input-field h-10 sm:max-w-[150px]"
                               placeholder="Ej. 45"
                               [value]="customDaysValue(selectedUser)"
                               (input)="setCustomDays(selectedUser, $any($event.target).value)"
@@ -318,6 +440,7 @@ import { PlatformService } from '../../services/platform.service';
                             <p class="mt-2 text-xs font-semibold text-red-600">{{ customDaysErrorMessage(selectedUser) }}</p>
                           }
                         </div>
+                        }
 
                         <div class="mt-4 space-y-4">
                           @if (isTrialSubscription(selectedUser)) {
@@ -348,22 +471,67 @@ import { PlatformService } from '../../services/platform.service';
                               </div>
                             </div>
                           } @else if (isActiveSubscription(selectedUser)) {
-                            <div class="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-                              <p class="text-sm font-bold text-text-primary">Extender suscripcion</p>
-                              <div class="mt-3 flex flex-wrap gap-2">
-                                @for (days of dayOptions; track days) {
-                                  <button type="button" class="btn-secondary btn-sm" [disabled]="isUpdatingSubscription(selectedUser)" (click)="extendActiveSubscription(selectedUser, days)">+{{ days }} dias</button>
-                                }
-                                <button type="button" class="btn-secondary btn-sm" [disabled]="isUpdatingSubscription(selectedUser)" (click)="extendActiveSubscription(selectedUser)">Personalizado</button>
-                              </div>
-                            </div>
+                            <div class="space-y-3">
+                              <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Gestionar suscripcion</p>
+                              <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+                                <div>
+                                  <label class="text-sm font-bold text-text-primary" [attr.for]="'extension-select-' + selectedUser.id">Extender suscripcion</label>
+                                  <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                                    <select
+                                      [id]="'extension-select-' + selectedUser.id"
+                                      class="h-10 min-w-0 flex-1 rounded-lg border border-border bg-white px-3 text-sm font-medium text-text-primary outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
+                                      [value]="selectedExtensionValue(selectedUser)"
+                                      [disabled]="isUpdatingSubscription(selectedUser)"
+                                      (change)="setSelectedExtension(selectedUser, $any($event.target).value)"
+                                    >
+                                      <option value="">Seleccionar extension</option>
+                                      @for (days of dayOptions; track days) {
+                                        <option [value]="days">+{{ days }} dias</option>
+                                      }
+                                      <option value="custom">Personalizado</option>
+                                    </select>
 
-                            <div class="rounded-lg border border-border p-3">
-                              <p class="text-sm font-bold text-text-primary">Cambiar plan</p>
-                              <div class="mt-3 flex flex-wrap gap-2">
-                                @for (plan of alternativePlans(selectedUser); track plan.code) {
-                                  <button type="button" class="btn-secondary btn-sm" [disabled]="isUpdatingSubscription(selectedUser)" (click)="changePlan(selectedUser, plan.code)">Cambiar a {{ plan.name }}</button>
-                                }
+                                    @if (selectedExtensionRequiresCustom(selectedUser)) {
+                                      <input
+                                        [id]="'custom-days-' + selectedUser.id"
+                                        type="number"
+                                        inputmode="numeric"
+                                        min="1"
+                                        step="1"
+                                        class="input-field h-10 sm:w-24"
+                                        placeholder="45"
+                                        [value]="customDaysValue(selectedUser)"
+                                        [disabled]="isUpdatingSubscription(selectedUser)"
+                                        (input)="setCustomDays(selectedUser, $any($event.target).value)"
+                                      >
+                                    }
+
+                                    <button
+                                      type="button"
+                                      class="btn-secondary btn-sm h-10 justify-center px-4"
+                                      [disabled]="isUpdatingSubscription(selectedUser) || !selectedExtensionValue(selectedUser)"
+                                      (click)="applyActiveSubscriptionExtension(selectedUser)"
+                                    >
+                                      Aplicar
+                                    </button>
+                                  </div>
+                                  @if (selectedExtensionRequiresCustom(selectedUser)) {
+                                    @if (customDaysErrorMessage(selectedUser)) {
+                                      <p class="mt-1 text-xs font-semibold text-red-600">{{ customDaysErrorMessage(selectedUser) }}</p>
+                                    } @else {
+                                      <p class="mt-1 text-xs text-text-secondary">Numero entero mayor a 0.</p>
+                                    }
+                                  }
+                                </div>
+
+                                <div>
+                                  <p class="text-sm font-bold text-text-primary">Cambiar plan</p>
+                                  <div class="mt-2 flex flex-wrap gap-2">
+                                    @for (plan of alternativePlans(selectedUser); track plan.code) {
+                                      <button type="button" class="btn-secondary btn-sm h-10" [disabled]="isUpdatingSubscription(selectedUser)" (click)="changePlan(selectedUser, plan.code)">Cambiar a {{ plan.name }}</button>
+                                    }
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           } @else if (isExpiredSubscription(selectedUser)) {
@@ -396,22 +564,22 @@ import { PlatformService } from '../../services/platform.service';
                       }
                     </div>
                   }
-                  <div class="rounded-lg border border-border p-4">
+                  <div class="border-b border-border pb-3">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Creado</p>
                     <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedUser.created_at) }}</p>
                   </div>
-                  <div class="rounded-lg border border-border p-4">
+                  <div class="border-b border-border pb-3">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Actualizado</p>
                     <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedUser.updated_at) }}</p>
                   </div>
                 </div>
               } @else {
                 @if (selectedUser.business) {
-                  <div class="space-y-5">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-border p-4">
+                  <div class="space-y-4">
+                    <div class="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
                       <div class="min-w-0">
-                        <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Negocio registrado</p>
-                        <h3 class="mt-1 text-xl font-bold text-text-primary truncate">{{ selectedUser.business.name }}</h3>
+                        <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Datos del negocio</p>
+                        <h3 class="mt-1 text-base font-bold text-text-primary truncate">{{ selectedUser.business.name }}</h3>
                       </div>
                       <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold self-start"
                         [class]="selectedUser.business.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
@@ -420,36 +588,36 @@ import { PlatformService } from '../../services/platform.service';
                       </span>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div class="rounded-lg border border-border p-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      <div class="border-b border-border pb-3">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Email publico</p>
                         <p class="mt-1 font-semibold text-text-primary break-all">{{ selectedUser.business.email || '-' }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4">
+                      <div class="border-b border-border pb-3">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Telefono</p>
                         <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.business.phone || '-' }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4">
+                      <div class="border-b border-border pb-3">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Ciudad</p>
                         <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.business.city || '-' }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4">
+                      <div class="border-b border-border pb-3">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Pais</p>
                         <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.business.country || '-' }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4 sm:col-span-2">
+                      <div class="border-b border-border pb-3 sm:col-span-2">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Direccion</p>
                         <p class="mt-1 font-semibold text-text-primary">{{ selectedUser.business.address || '-' }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4 sm:col-span-2">
+                      <div class="border-b border-border pb-3 sm:col-span-2">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Descripcion</p>
                         <p class="mt-1 text-sm text-text-secondary whitespace-pre-line">{{ selectedUser.business.description || '-' }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4">
+                      <div class="border-b border-border pb-3">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Creado</p>
                         <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedUser.business.created_at) }}</p>
                       </div>
-                      <div class="rounded-lg border border-border p-4">
+                      <div class="border-b border-border pb-3">
                         <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Actualizado</p>
                         <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedUser.business.updated_at) }}</p>
                       </div>
@@ -479,6 +647,7 @@ export class UserListComponent implements OnInit {
   updatingSubscriptionUserId: string | null = null;
   customDaysByUserId: Record<string, string> = {};
   customDaysErrors: Record<string, string> = {};
+  subscriptionExtensionByUserId: Record<string, string> = {};
   selectedUser: any | null = null;
   activeDetailTab: 'user' | 'business' = 'user';
   readonly dayOptions = [7, 14, 30];
@@ -713,6 +882,31 @@ export class UserListComponent implements OnInit {
 
   customDaysValue(user: any): string {
     return this.customDaysByUserId[user.id] ?? '';
+  }
+
+  selectedExtensionValue(user: any): string {
+    return this.subscriptionExtensionByUserId[user.id] ?? '';
+  }
+
+  setSelectedExtension(user: any, value: string): void {
+    this.subscriptionExtensionByUserId[user.id] = value;
+    delete this.customDaysErrors[user.id];
+  }
+
+  selectedExtensionRequiresCustom(user: any): boolean {
+    return this.selectedExtensionValue(user) === 'custom';
+  }
+
+  applyActiveSubscriptionExtension(user: any): void {
+    const selectedExtension = this.selectedExtensionValue(user);
+    if (!selectedExtension) return;
+
+    if (selectedExtension === 'custom') {
+      this.extendActiveSubscription(user);
+      return;
+    }
+
+    this.extendActiveSubscription(user, Number(selectedExtension));
   }
 
   setCustomDays(user: any, value: string): void {

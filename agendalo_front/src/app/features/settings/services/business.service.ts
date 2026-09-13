@@ -56,6 +56,7 @@ export class BusinessService {
 
       const existingBusiness = await this.resolveExistingBusinessForUser(authUser.id);
       if (existingBusiness) {
+        await this.ensureInitialBusinessData(existingBusiness.id);
         return this.wrap(existingBusiness);
       }
 
@@ -310,8 +311,8 @@ export class BusinessService {
     if (error) throw new Error(error.message);
   }
 
-  private async createTrialSubscription(_businessId: number): Promise<void> {
-    const { error } = await this.supabase.client.rpc('create_initial_business_trial');
+  private async createInitialBusinessSubscription(_businessId: number): Promise<void> {
+    const { error } = await this.supabase.client.rpc('create_initial_business_subscription');
 
     if (error) {
       if (this.isMissingSubscriptionSchema(error)) return;
@@ -400,7 +401,7 @@ export class BusinessService {
   private async ensureInitialBusinessData(businessId: number): Promise<void> {
     await this.createDefaultSettings(businessId);
     await this.createDefaultOpeningHours(businessId);
-    await this.createTrialSubscription(businessId);
+    await this.createInitialBusinessSubscription(businessId);
   }
 
   private saveBusiness(business: Business): void {

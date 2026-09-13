@@ -361,7 +361,6 @@ export class AdminLayoutComponent implements OnInit {
         { label: 'Dashboard Admin', iconPath: 'assets/Interfaz/Dashboard.png', route: '/admin-plataforma' },
         { label: 'Solicitudes', iconPath: 'assets/Interfaz/Finanzas.png', route: '/admin-plataforma/solicitudes', badge: this.platformService.pendingRequestsCount() },
         { label: 'Usuarios', iconPath: 'assets/Interfaz/Clientes.png', route: '/admin-plataforma/usuarios' },
-        { label: 'Configuración', iconPath: 'assets/Interfaz/Configuraci%C3%B3n.png', route: '/app/configuracion' },
       ];
     }
 

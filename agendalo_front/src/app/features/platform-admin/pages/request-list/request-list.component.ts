@@ -9,27 +9,45 @@ import { ApiResponse } from '../../../../models/auth.models';
 import { PlatformService } from '../../services/platform.service';
 
 type RequestTab = 'all' | 'registrations' | 'subscriptions';
-type RequestStatusFilter = 'all' | 'pending' | 'instructions_sent' | 'completed' | 'cancelled';
+type RequestStatusFilter =
+  | 'all'
+  | 'pending'
+  | 'pending_approval'
+  | 'pending_payment'
+  | 'instructions_sent'
+  | 'approved'
+  | 'completed'
+  | 'cancelled';
 
 interface RequestInboxItem {
   id: string;
   source: 'registration' | 'subscription';
+  registrationKind: 'request' | 'legacy' | null;
   typeLabel: string;
   userName: string;
   userEmail: string;
   businessName: string;
   currentPlan: string;
   requestedPlan: string;
+  requestedPlanCode: string | null;
   remainingDays: number | null;
   requestedPeriodDays: number | null;
+  includedTrialDays: number | null;
+  planPriceSnapshot: number | null;
   currentSubscriptionStatus: string;
   currentEndsAt: string | null;
   notes: string | null;
   status: string;
   createdAt: string;
   instructionsSentAt: string | null;
+  instructionsEmailId: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
+  approvedAt: string | null;
+  activationDeadline: string | null;
+  paymentConfirmedAt: string | null;
+  activationEmailSentAt: string | null;
+  activationEmailId: string | null;
   raw: any;
 }
 
@@ -59,7 +77,7 @@ interface RequestInboxItem {
         </div>
         <div class="card p-4 border-l-4 border-amber-500">
           <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Nuevos registros</p>
-          <p class="mt-1 text-2xl font-bold text-text-primary">{{ pendingProfiles.length }}</p>
+          <p class="mt-1 text-2xl font-bold text-text-primary">{{ newRegistrationCount() }}</p>
         </div>
         <div class="card p-4 border-l-4 border-blue-500">
           <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Solicitudes de suscripcion</p>
@@ -84,11 +102,9 @@ interface RequestInboxItem {
           <label class="flex flex-col gap-1 text-sm font-semibold text-text-secondary sm:min-w-[220px]">
             Estado
             <select class="form-input h-10" [(ngModel)]="statusFilter">
-              <option value="all">Todos los estados</option>
-              <option value="pending">Pendiente</option>
-              <option value="instructions_sent">Instrucciones enviadas</option>
-              <option value="completed">Completada</option>
-              <option value="cancelled">Cancelada</option>
+              @for (option of statusFilterOptions(); track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
             </select>
           </label>
         </div>
@@ -114,15 +130,13 @@ interface RequestInboxItem {
           </div>
         } @else {
           <div class="overflow-x-auto text-sm">
-            <table class="w-full min-w-[1180px] text-left border-collapse">
+            <table class="w-full min-w-[980px] text-left border-collapse">
               <thead>
                 <tr class="bg-gray-50 border-b border-border">
                   <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Tipo</th>
                   <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Usuario</th>
-                  <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Negocio</th>
-                  <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Plan actual</th>
                   <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Plan solicitado</th>
-                  <th class="p-4 font-bold uppercase text-text-secondary tracking-wider whitespace-nowrap">Dias snapshot</th>
+                  <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Detalle</th>
                   <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Fecha</th>
                   <th class="p-4 font-bold uppercase text-text-secondary tracking-wider">Estado</th>
                   <th class="p-4 font-bold uppercase text-text-secondary tracking-wider text-right">Accion</th>
@@ -136,10 +150,8 @@ interface RequestInboxItem {
                       <p class="font-semibold text-text-primary">{{ request.userName }}</p>
                       <p class="text-xs text-text-secondary break-all">{{ request.userEmail }}</p>
                     </td>
-                    <td class="p-4 text-text-secondary font-medium">{{ request.businessName }}</td>
-                    <td class="p-4 text-text-secondary font-medium">{{ request.currentPlan }}</td>
                     <td class="p-4 text-text-primary font-semibold">{{ request.requestedPlan }}</td>
-                    <td class="p-4 text-text-secondary font-medium whitespace-nowrap">{{ daysLabel(request.remainingDays) }}</td>
+                    <td class="p-4 text-text-secondary font-medium">{{ listDetail(request) }}</td>
                     <td class="p-4 text-text-secondary font-medium whitespace-nowrap">{{ formatDate(request.createdAt) }}</td>
                     <td class="p-4">
                       <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs font-semibold" [class]="statusClass(request.status)">
@@ -178,11 +190,18 @@ interface RequestInboxItem {
                 @if (selectedRequest.source === 'subscription') {
                   <span class="text-xs font-semibold text-text-secondary">Snapshot informativo; no modifica la suscripcion.</span>
                 }
+                @if (selectedRequest.registrationKind === 'request') {
+                  <span class="text-xs font-semibold text-text-secondary">Transiciones seguras desde servidor.</span>
+                }
               </div>
 
               @if (selectedRequest.source === 'subscription') {
                 <div class="rounded-lg border border-border bg-gray-50 p-4">
                   <p class="text-sm font-semibold text-text-primary">{{ subscriptionRequestStageText(selectedRequest) }}</p>
+                </div>
+              } @else if (selectedRequest.registrationKind === 'request') {
+                <div class="rounded-lg border border-border bg-gray-50 p-4">
+                  <p class="text-sm font-semibold text-text-primary">{{ registrationRequestStageText(selectedRequest) }}</p>
                 </div>
               }
 
@@ -251,6 +270,73 @@ interface RequestInboxItem {
                       <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.cancelledAt) }}</p>
                     </div>
                   }
+                } @else if (selectedRequest.registrationKind === 'request') {
+                  <div class="rounded-lg border border-border p-4">
+                    <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Plan solicitado</p>
+                    <p class="mt-1 font-semibold text-text-primary">{{ selectedRequest.requestedPlan }}</p>
+                  </div>
+                  <div class="rounded-lg border border-border p-4">
+                    <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Tipo</p>
+                    <p class="mt-1 font-semibold text-text-primary">{{ selectedRequest.typeLabel }}</p>
+                  </div>
+                  <div class="rounded-lg border border-border p-4">
+                    <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Dias incluidos</p>
+                    <p class="mt-1 font-semibold text-text-primary">{{ daysLabel(selectedRequest.includedTrialDays) }}</p>
+                  </div>
+                  @if (selectedRequest.requestedPlanCode !== 'trial') {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Precio snapshot</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatPrice(selectedRequest.planPriceSnapshot) }}</p>
+                    </div>
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Dias comprados</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ daysLabel(selectedRequest.requestedPeriodDays) }}</p>
+                    </div>
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Total estimado</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ daysLabel(totalRegistrationDays(selectedRequest)) }}</p>
+                    </div>
+                  }
+                  @if (selectedRequest.instructionsSentAt) {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Instrucciones enviadas</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.instructionsSentAt) }}</p>
+                    </div>
+                  }
+                  @if (selectedRequest.activationEmailSentAt) {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Correo activacion</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.activationEmailSentAt) }}</p>
+                    </div>
+                  }
+                  @if (selectedRequest.paymentConfirmedAt) {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Pago confirmado</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.paymentConfirmedAt) }}</p>
+                    </div>
+                  }
+                  @if (selectedRequest.approvedAt) {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Aprobada</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.approvedAt) }}</p>
+                    </div>
+                  }
+                  @if (selectedRequest.activationDeadline) {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Fecha limite activacion</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.activationDeadline) }}</p>
+                    </div>
+                  }
+                  @if (selectedRequest.cancelledAt) {
+                    <div class="rounded-lg border border-border p-4">
+                      <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Cancelada</p>
+                      <p class="mt-1 font-semibold text-text-primary">{{ formatDate(selectedRequest.cancelledAt) }}</p>
+                    </div>
+                  }
+                  <div class="rounded-lg border border-border p-4 sm:col-span-2">
+                    <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Notas admin</p>
+                    <p class="mt-1 text-sm text-text-secondary whitespace-pre-line">{{ selectedRequest.notes || '-' }}</p>
+                  </div>
                 } @else {
                   <div class="rounded-lg border border-border p-4">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Rol</p>
@@ -259,6 +345,10 @@ interface RequestInboxItem {
                   <div class="rounded-lg border border-border p-4">
                     <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Estado</p>
                     <p class="mt-1 font-semibold text-text-primary">Pendiente de aprobacion</p>
+                  </div>
+                  <div class="rounded-lg border border-border p-4">
+                    <p class="text-xs font-bold uppercase tracking-wider text-text-secondary">Plan solicitado</p>
+                    <p class="mt-1 font-semibold text-text-primary">Sin seleccion</p>
                   </div>
                 }
 
@@ -271,13 +361,37 @@ interface RequestInboxItem {
 
             <div class="flex flex-col-reverse gap-2 border-t border-border p-5 sm:flex-row sm:justify-end">
               <button type="button" class="btn-secondary justify-center" (click)="closeDetail()">Cerrar</button>
-              @if (selectedRequest.source === 'registration') {
+              @if (selectedRequest.registrationKind === 'legacy') {
                 <button type="button" class="btn-primary justify-center" [disabled]="approvingProfileId === selectedRequest.raw.id" (click)="approveRegistration(selectedRequest)">
                   @if (approvingProfileId === selectedRequest.raw.id) { Aprobando... } @else { Aprobar usuario }
+                </button>
+              } @else if (canCancelRegistrationRequest(selectedRequest)) {
+                <button type="button" class="btn-secondary justify-center text-red-700 border-red-200 hover:bg-red-50" [disabled]="resolvingRequestId === selectedRequest.raw.id" (click)="cancelRegistrationRequest(selectedRequest)">
+                  @if (resolvingRequestId === selectedRequest.raw.id) { Procesando... } @else { Cancelar solicitud }
                 </button>
               } @else if (canCancelSubscriptionRequest(selectedRequest)) {
                 <button type="button" class="btn-secondary justify-center text-red-700 border-red-200 hover:bg-red-50" [disabled]="resolvingRequestId === selectedRequest.raw.id" (click)="cancelSubscriptionRequest(selectedRequest)">
                   @if (resolvingRequestId === selectedRequest.raw.id) { Procesando... } @else { Cancelar solicitud }
+                </button>
+              }
+              @if (canApproveTrialRegistration(selectedRequest)) {
+                <button type="button" class="btn-primary justify-center" [disabled]="resolvingRequestId === selectedRequest.raw.id" (click)="approveTrialRegistrationRequest(selectedRequest)">
+                  @if (resolvingRequestId === selectedRequest.raw.id) { Aprobando... } @else { Aprobar prueba }
+                </button>
+              }
+              @if (canSendRegistrationInstructions(selectedRequest)) {
+                <button type="button" class="btn-primary justify-center" [disabled]="resolvingRequestId === selectedRequest.raw.id" (click)="sendRegistrationPaymentInstructions(selectedRequest)">
+                  @if (resolvingRequestId === selectedRequest.raw.id) { Enviando... } @else { Enviar instrucciones }
+                </button>
+              }
+              @if (canCompletePaidRegistration(selectedRequest)) {
+                <button type="button" class="btn-primary justify-center" [disabled]="resolvingRequestId === selectedRequest.raw.id" (click)="completePaidRegistrationRequest(selectedRequest)">
+                  @if (resolvingRequestId === selectedRequest.raw.id) { Activando... } @else { Confirmar pago y activar cuenta }
+                </button>
+              }
+              @if (canSendRegistrationActivationEmail(selectedRequest)) {
+                <button type="button" class="btn-primary justify-center" [disabled]="resolvingRequestId === selectedRequest.raw.id" (click)="sendRegistrationActivationEmail(selectedRequest)">
+                  @if (resolvingRequestId === selectedRequest.raw.id) { Enviando... } @else { Enviar correo de activacion }
                 </button>
               }
               @if (selectedRequest.source === 'subscription' && canSendSubscriptionInstructions(selectedRequest)) {
@@ -298,7 +412,8 @@ interface RequestInboxItem {
   `,
 })
 export class RequestListComponent implements OnInit {
-  pendingProfiles: any[] = [];
+  registrationRequests: any[] = [];
+  legacyPendingProfiles: any[] = [];
   subscriptionRequests: any[] = [];
   loading = true;
   pendingTotal = 0;
@@ -321,16 +436,19 @@ export class RequestListComponent implements OnInit {
     this.loading = true;
 
     forkJoin({
+      registrationRequests: this.platformService.getRegistrationRequests(),
       pendingProfiles: this.platformService.getPendingProfiles(),
       subscriptionRequests: this.platformService.getSubscriptionRequests(),
       pendingCount: this.platformService.getPendingRequestsCount(),
     }).subscribe({
       next: (res: {
+        registrationRequests: ApiResponse<any[]>;
         pendingProfiles: ApiResponse<any[]>;
         subscriptionRequests: ApiResponse<any[]>;
         pendingCount: ApiResponse<any>;
       }) => {
-        this.pendingProfiles = res.pendingProfiles.data;
+        this.registrationRequests = res.registrationRequests.data;
+        this.legacyPendingProfiles = res.pendingProfiles.data;
         this.subscriptionRequests = res.subscriptionRequests.data;
         this.pendingTotal = res.pendingCount.data.total;
         this.loading = false;
@@ -350,6 +468,9 @@ export class RequestListComponent implements OnInit {
 
   setTab(tab: RequestTab): void {
     this.activeTab = tab;
+    if (!this.statusFilterOptions().some(option => option.value === this.statusFilter)) {
+      this.statusFilter = 'all';
+    }
   }
 
   openDetail(request: RequestInboxItem): void {
@@ -361,7 +482,7 @@ export class RequestListComponent implements OnInit {
   }
 
   approveRegistration(request: RequestInboxItem): void {
-    if (request.source !== 'registration') return;
+    if (request.registrationKind !== 'legacy') return;
     if (!confirm(`Aceptar la solicitud de ${request.userName}? Desde ese momento podra iniciar sesion.`)) return;
 
     this.approvingProfileId = request.raw.id;
@@ -389,6 +510,222 @@ export class RequestListComponent implements OnInit {
 
   canSendSubscriptionInstructions(request: RequestInboxItem): boolean {
     return request.source === 'subscription' && request.status === 'pending';
+  }
+
+  canApproveTrialRegistration(request: RequestInboxItem): boolean {
+    return request.registrationKind === 'request'
+      && request.requestedPlanCode === 'trial'
+      && request.status === 'pending_approval';
+  }
+
+  canSendRegistrationInstructions(request: RequestInboxItem): boolean {
+    return request.registrationKind === 'request'
+      && ['agenda', 'premium'].includes(request.requestedPlanCode ?? '')
+      && request.status === 'pending_payment';
+  }
+
+  canCompletePaidRegistration(request: RequestInboxItem): boolean {
+    return request.registrationKind === 'request'
+      && ['agenda', 'premium'].includes(request.requestedPlanCode ?? '')
+      && request.status === 'instructions_sent';
+  }
+
+  canCancelRegistrationRequest(request: RequestInboxItem): boolean {
+    return request.registrationKind === 'request'
+      && ['pending_approval', 'pending_payment', 'instructions_sent'].includes(request.status);
+  }
+
+  canSendRegistrationActivationEmail(request: RequestInboxItem): boolean {
+    return request.registrationKind === 'request'
+      && request.status === 'approved'
+      && !request.activationEmailSentAt;
+  }
+
+  newRegistrationCount(): number {
+    return this.registrationRequests.length + this.legacyPendingProfiles.length;
+  }
+
+  statusFilterOptions(): Array<{ value: RequestStatusFilter; label: string }> {
+    if (this.activeTab === 'registrations') {
+      return [
+        { value: 'all', label: 'Todos los estados' },
+        { value: 'pending_approval', label: 'Pendiente aprobacion' },
+        { value: 'pending_payment', label: 'Pendiente pago' },
+        { value: 'instructions_sent', label: 'Instrucciones enviadas' },
+        { value: 'approved', label: 'Aprobada' },
+        { value: 'cancelled', label: 'Cancelada' },
+      ];
+    }
+
+    if (this.activeTab === 'subscriptions') {
+      return [
+        { value: 'all', label: 'Todos los estados' },
+        { value: 'pending', label: 'Pendiente' },
+        { value: 'instructions_sent', label: 'Instrucciones enviadas' },
+        { value: 'completed', label: 'Completada' },
+        { value: 'cancelled', label: 'Cancelada' },
+      ];
+    }
+
+    return [
+      { value: 'all', label: 'Todos los estados' },
+      { value: 'pending_approval', label: 'Pendiente aprobacion' },
+      { value: 'pending_payment', label: 'Pendiente pago' },
+      { value: 'pending', label: 'Pendiente suscripcion' },
+      { value: 'instructions_sent', label: 'Instrucciones enviadas' },
+      { value: 'approved', label: 'Aprobada' },
+      { value: 'completed', label: 'Completada' },
+      { value: 'cancelled', label: 'Cancelada' },
+    ];
+  }
+
+  async approveTrialRegistrationRequest(request: RequestInboxItem): Promise<void> {
+    if (!this.canApproveTrialRegistration(request)) return;
+
+    const result = await Swal.fire({
+      title: 'Aprobar cuenta',
+      html: this.approveTrialConfirmationHtml(request),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Aprobar cuenta',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.resolvingRequestId = request.raw.id;
+    this.platformService.approveTrialRegistrationRequest(request.raw.id).subscribe({
+      next: () => {
+        this.sendActivationEmailAfterAccountActivation(request.raw.id, 'Cuenta activada');
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo aprobar la cuenta.');
+        this.resolvingRequestId = null;
+      },
+    });
+  }
+
+  async sendRegistrationPaymentInstructions(request: RequestInboxItem): Promise<void> {
+    if (!this.canSendRegistrationInstructions(request)) return;
+
+    const result = await Swal.fire({
+      title: 'Enviar instrucciones de pago?',
+      html: this.registrationInstructionsConfirmationHtml(request),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Si, enviar instrucciones',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.resolvingRequestId = request.raw.id;
+    this.platformService.sendRegistrationPaymentInstructions(request.raw.id).subscribe({
+      next: () => {
+        this.toastService.success('Instrucciones enviadas.');
+        this.resolvingRequestId = null;
+        this.closeDetail();
+        this.loadRequests();
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudieron enviar las instrucciones.');
+        this.resolvingRequestId = null;
+      },
+    });
+  }
+
+  async completePaidRegistrationRequest(request: RequestInboxItem): Promise<void> {
+    if (!this.canCompletePaidRegistration(request)) return;
+
+    const result = await Swal.fire({
+      title: 'Confirmar pago y activar cuenta',
+      html: this.completePaidRegistrationConfirmationHtml(request),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Confirmar pago y activar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.resolvingRequestId = request.raw.id;
+    this.platformService.completePaidRegistrationRequest(request.raw.id).subscribe({
+      next: () => {
+        this.sendActivationEmailAfterAccountActivation(request.raw.id, 'Pago confirmado y cuenta activada');
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo activar la cuenta.');
+        this.resolvingRequestId = null;
+      },
+    });
+  }
+
+  async cancelRegistrationRequest(request: RequestInboxItem): Promise<void> {
+    if (!this.canCancelRegistrationRequest(request)) return;
+
+    const result = await Swal.fire({
+      title: 'Cancelar solicitud',
+      text: 'La solicitud quedara cerrada. La cuenta no sera activada.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Si, cancelar solicitud',
+      cancelButtonText: 'Volver',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.resolvingRequestId = request.raw.id;
+    this.platformService.cancelRegistrationRequest(request.raw.id).subscribe({
+      next: () => {
+        this.toastService.success('Solicitud cancelada.');
+        this.resolvingRequestId = null;
+        this.closeDetail();
+        this.loadRequests();
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo cancelar la solicitud.');
+        this.resolvingRequestId = null;
+      },
+    });
+  }
+
+  async sendRegistrationActivationEmail(request: RequestInboxItem): Promise<void> {
+    if (!this.canSendRegistrationActivationEmail(request)) return;
+
+    const result = await Swal.fire({
+      title: 'Enviar correo de activacion?',
+      text: 'Se notificara al usuario que su cuenta ya esta activa.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Enviar correo',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.resolvingRequestId = request.raw.id;
+    this.platformService.sendRegistrationActivationEmail(request.raw.id).subscribe({
+      next: () => {
+        this.toastService.success('Correo de activacion enviado.');
+        this.resolvingRequestId = null;
+        this.closeDetail();
+        this.loadRequests();
+      },
+      error: (err) => {
+        this.toastService.error(err?.message ?? 'No se pudo enviar el correo de activacion.');
+        this.resolvingRequestId = null;
+      },
+    });
   }
 
   async sendSubscriptionInstructions(request: RequestInboxItem): Promise<void> {
@@ -430,6 +767,35 @@ export class RequestListComponent implements OnInit {
           confirmButtonText: 'Entendido',
         });
         this.resolvingRequestId = null;
+      },
+    });
+  }
+
+  private sendActivationEmailAfterAccountActivation(requestId: number, successTitle: string): void {
+    this.platformService.sendRegistrationActivationEmail(requestId).subscribe({
+      next: () => {
+        this.toastService.success(`${successTitle}. Se envio el correo al usuario.`);
+        void Swal.fire({
+          title: successTitle,
+          text: 'Se envio el correo al usuario.',
+          icon: 'success',
+          confirmButtonText: 'Entendido',
+        });
+        this.resolvingRequestId = null;
+        this.closeDetail();
+        this.loadRequests();
+      },
+      error: (err) => {
+        this.toastService.warning('Cuenta activada, pero no se pudo enviar el correo de notificacion.');
+        void Swal.fire({
+          title: successTitle,
+          text: err?.message ?? 'La cuenta fue activada, pero no se pudo enviar el correo de notificacion.',
+          icon: 'warning',
+          confirmButtonText: 'Entendido',
+        });
+        this.resolvingRequestId = null;
+        this.closeDetail();
+        this.loadRequests();
       },
     });
   }
@@ -505,7 +871,10 @@ export class RequestListComponent implements OnInit {
   statusLabel(status: string): string {
     const labels: Record<string, string> = {
       pending: 'Pendiente',
+      pending_approval: 'Pendiente de aprobacion',
+      pending_payment: 'Pendiente de pago',
       instructions_sent: 'Instrucciones enviadas',
+      approved: 'Aprobada',
       completed: 'Completada',
       cancelled: 'Cancelada',
     };
@@ -516,7 +885,10 @@ export class RequestListComponent implements OnInit {
   statusClass(status: string): string {
     const classes: Record<string, string> = {
       pending: 'bg-amber-100 text-amber-700',
+      pending_approval: 'bg-amber-100 text-amber-700',
+      pending_payment: 'bg-blue-100 text-blue-700',
       instructions_sent: 'bg-blue-100 text-blue-700',
+      approved: 'bg-green-100 text-green-700',
       completed: 'bg-green-100 text-green-700',
       cancelled: 'bg-red-100 text-red-700',
     };
@@ -553,10 +925,42 @@ export class RequestListComponent implements OnInit {
     }).format(date);
   }
 
+  listDetail(request: RequestInboxItem): string {
+    if (request.registrationKind === 'request') {
+      if (request.requestedPlanCode === 'trial') {
+        return `${this.daysLabel(request.includedTrialDays)} incluidos`;
+      }
+
+      return `${this.formatPrice(request.planPriceSnapshot)} - ${this.daysLabel(request.requestedPeriodDays)} comprados + ${this.daysLabel(request.includedTrialDays)} incluidos`;
+    }
+
+    if (request.registrationKind === 'legacy') {
+      return 'Registro anterior sin seleccion de plan';
+    }
+
+    const business = request.businessName !== '-' ? request.businessName : 'Sin negocio';
+    return `${business} - actual: ${request.currentPlan}`;
+  }
+
+  totalRegistrationDays(request: RequestInboxItem): number | null {
+    if (request.registrationKind !== 'request') return null;
+    return (request.requestedPeriodDays ?? 0) + (request.includedTrialDays ?? 0);
+  }
+
   detailTitle(request: RequestInboxItem): string {
     return request.source === 'registration'
       ? request.userName
       : `${request.businessName} - ${request.requestedPlan}`;
+  }
+
+  registrationRequestStageText(request: RequestInboxItem): string {
+    if (request.status === 'pending_approval') return 'Prueba gratuita pendiente de aprobacion. Puedes aprobar la cuenta o cancelar la solicitud.';
+    if (request.status === 'pending_payment') return 'Pendiente de envio de instrucciones. Puedes enviar el correo de transferencia o cancelar la solicitud.';
+    if (request.status === 'instructions_sent') return 'Instrucciones enviadas. Puedes confirmar el pago y activar la cuenta o cancelar la solicitud.';
+    if (request.status === 'approved') return 'Registro aprobado. La cuenta ya puede ingresar; la suscripcion se creara cuando exista el negocio.';
+    if (request.status === 'cancelled') return 'Registro cancelado. La cuenta no fue activada por esta solicitud.';
+
+    return 'Solicitud de registro.';
   }
 
   subscriptionRequestStageText(request: RequestInboxItem): string {
@@ -581,37 +985,82 @@ export class RequestListComponent implements OnInit {
   }
 
   private allRequests(): RequestInboxItem[] {
-    const registrationItems = this.pendingProfiles.map(profile => this.mapPendingProfile(profile));
+    const registrationRequestItems = this.registrationRequests.map(request => this.mapRegistrationRequest(request));
+    const legacyRegistrationItems = this.legacyPendingProfiles.map(profile => this.mapPendingProfile(profile));
     const subscriptionItems = this.subscriptionRequests.map(request => this.mapSubscriptionRequest(request));
 
-    return [...registrationItems, ...subscriptionItems].sort((a, b) => {
-      if (a.status === 'pending' && b.status !== 'pending') return -1;
-      if (a.status !== 'pending' && b.status === 'pending') return 1;
+    return [...registrationRequestItems, ...legacyRegistrationItems, ...subscriptionItems].sort((a, b) => {
+      if (this.isOpenRequestStatus(a) && !this.isOpenRequestStatus(b)) return -1;
+      if (!this.isOpenRequestStatus(a) && this.isOpenRequestStatus(b)) return 1;
 
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }
 
+  private mapRegistrationRequest(request: any): RequestInboxItem {
+    return {
+      id: `registration-request:${request.id}`,
+      source: 'registration',
+      registrationKind: 'request',
+      typeLabel: request.requested_plan_code === 'trial' ? 'Prueba gratis' : 'Registro con plan',
+      userName: request.profile?.name || 'Usuario',
+      userEmail: request.profile?.email || '-',
+      businessName: '-',
+      currentPlan: '-',
+      requestedPlan: this.registrationPlanLabel(request.requested_plan_code, request.requested_plan?.name),
+      requestedPlanCode: request.requested_plan_code,
+      remainingDays: null,
+      requestedPeriodDays: request.purchased_period_days,
+      includedTrialDays: request.included_trial_days,
+      planPriceSnapshot: request.plan_price_snapshot,
+      currentSubscriptionStatus: '-',
+      currentEndsAt: null,
+      notes: request.admin_notes,
+      status: request.status,
+      createdAt: request.created_at,
+      instructionsSentAt: request.instructions_sent_at,
+      instructionsEmailId: request.instructions_email_id,
+      completedAt: null,
+      cancelledAt: request.cancelled_at,
+      approvedAt: request.approved_at,
+      activationDeadline: request.activation_deadline,
+      paymentConfirmedAt: request.payment_confirmed_at,
+      activationEmailSentAt: request.activation_email_sent_at,
+      activationEmailId: request.activation_email_id,
+      raw: request,
+    };
+  }
+
   private mapPendingProfile(profile: any): RequestInboxItem {
     return {
-      id: `registration:${profile.id}`,
+      id: `legacy-registration:${profile.id}`,
       source: 'registration',
-      typeLabel: 'Nuevo registro',
+      registrationKind: 'legacy',
+      typeLabel: 'Registro legacy',
       userName: profile.name || 'Usuario',
       userEmail: profile.email || '-',
       businessName: '-',
       currentPlan: '-',
-      requestedPlan: '-',
+      requestedPlan: 'Sin seleccion',
+      requestedPlanCode: null,
       remainingDays: null,
       requestedPeriodDays: null,
+      includedTrialDays: null,
+      planPriceSnapshot: null,
       currentSubscriptionStatus: '-',
       currentEndsAt: null,
       notes: null,
-      status: 'pending',
+      status: 'pending_approval',
       createdAt: profile.created_at,
       instructionsSentAt: null,
+      instructionsEmailId: null,
       completedAt: null,
       cancelledAt: null,
+      approvedAt: null,
+      activationDeadline: null,
+      paymentConfirmedAt: null,
+      activationEmailSentAt: null,
+      activationEmailId: null,
       raw: profile,
     };
   }
@@ -620,24 +1069,103 @@ export class RequestListComponent implements OnInit {
     return {
       id: `subscription:${request.id}`,
       source: 'subscription',
+      registrationKind: null,
       typeLabel: this.requestTypeLabel(request.request_type),
       userName: request.profile?.name || 'Usuario',
       userEmail: request.profile?.email || '-',
       businessName: request.business?.name || '-',
       currentPlan: request.current_plan?.name || '-',
       requestedPlan: request.requested_plan?.name || '-',
+      requestedPlanCode: request.requested_plan?.code ?? null,
       remainingDays: request.remaining_days_snapshot,
       requestedPeriodDays: request.requested_period_days,
+      includedTrialDays: null,
+      planPriceSnapshot: request.requested_plan?.price_clp ?? null,
       currentSubscriptionStatus: request.current_subscription_status || '-',
       currentEndsAt: request.current_ends_at,
       notes: request.notes,
       status: request.status,
       createdAt: request.created_at,
       instructionsSentAt: request.instructions_sent_at,
+      instructionsEmailId: null,
       completedAt: request.completed_at,
       cancelledAt: request.cancelled_at,
+      approvedAt: null,
+      activationDeadline: null,
+      paymentConfirmedAt: null,
+      activationEmailSentAt: null,
+      activationEmailId: null,
       raw: request,
     };
+  }
+
+  private registrationPlanLabel(planCode: string | null | undefined, planName: string | null | undefined): string {
+    const labels: Record<string, string> = {
+      trial: 'Prueba gratis',
+      agenda: 'Agenda',
+      premium: 'Premium',
+    };
+
+    return labels[planCode ?? ''] ?? planName ?? '-';
+  }
+
+  private isOpenRequestStatus(request: RequestInboxItem): boolean {
+    if (request.source === 'registration') {
+      return ['pending_approval', 'pending_payment', 'instructions_sent'].includes(request.status);
+    }
+
+    return ['pending', 'instructions_sent'].includes(request.status);
+  }
+
+  private approveTrialConfirmationHtml(request: RequestInboxItem): string {
+    return `
+      <div class="text-left space-y-3">
+        <p><strong>Usuario:</strong> ${this.escapeHtml(request.userName)}</p>
+        <p><strong>Email:</strong> ${this.escapeHtml(request.userEmail)}</p>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p><strong>Plan:</strong> Prueba gratis</p>
+          <p><strong>Dias incluidos:</strong> ${this.daysLabel(request.includedTrialDays)}</p>
+        </div>
+        <p>El usuario podra ingresar a Skedia una vez aprobada la cuenta.</p>
+        <p>Tendra hasta 5 dias para configurar su negocio. Su periodo comenzara al completar la configuracion o, como maximo, al cumplirse ese plazo.</p>
+      </div>
+    `;
+  }
+
+  private completePaidRegistrationConfirmationHtml(request: RequestInboxItem): string {
+    return `
+      <div class="text-left space-y-3">
+        <p><strong>Usuario:</strong> ${this.escapeHtml(request.userName)}</p>
+        <p><strong>Email:</strong> ${this.escapeHtml(request.userEmail)}</p>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p><strong>Plan solicitado:</strong> ${this.escapeHtml(request.requestedPlan)}</p>
+          <p><strong>Precio snapshot:</strong> ${this.escapeHtml(this.formatPrice(request.planPriceSnapshot))}</p>
+          <p><strong>Dias incluidos:</strong> ${this.daysLabel(request.includedTrialDays)}</p>
+          <p><strong>Dias comprados:</strong> ${this.daysLabel(request.requestedPeriodDays)}</p>
+          <p><strong>Total esperado:</strong> ${this.daysLabel(this.totalRegistrationDays(request))}</p>
+        </div>
+        <p>Al confirmar, la cuenta quedara habilitada.</p>
+        <p>El usuario tendra hasta 5 dias para configurar su negocio. La suscripcion se creara posteriormente cuando exista el negocio.</p>
+      </div>
+    `;
+  }
+
+  private registrationInstructionsConfirmationHtml(request: RequestInboxItem): string {
+    return `
+      <div class="text-left space-y-3">
+        <p><strong>Usuario:</strong> ${this.escapeHtml(request.userName)}</p>
+        <p><strong>Email:</strong> ${this.escapeHtml(request.userEmail)}</p>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p><strong>Plan:</strong> ${this.escapeHtml(request.requestedPlan)}</p>
+          <p><strong>Precio:</strong> ${this.escapeHtml(this.formatPrice(request.planPriceSnapshot))}</p>
+          <p><strong>Dias incluidos:</strong> ${this.daysLabel(request.includedTrialDays)}</p>
+          <p><strong>Dias comprados:</strong> ${this.daysLabel(request.requestedPeriodDays)}</p>
+          <p><strong>Total:</strong> ${this.daysLabel(this.totalRegistrationDays(request))}</p>
+        </div>
+        <p>Se enviara un correo con las instrucciones de transferencia.</p>
+        <p>La cuenta todavia no sera activada.</p>
+      </div>
+    `;
   }
 
   private completeConfirmationHtml(request: RequestInboxItem): string {
@@ -690,7 +1218,7 @@ export class RequestListComponent implements OnInit {
     return labels[type] ?? 'Solicitud de suscripcion';
   }
 
-  private formatPrice(value: number | null | undefined): string {
+  formatPrice(value: number | null | undefined): string {
     if (value === null || value === undefined) return '-';
 
     return new Intl.NumberFormat('es-CL', {

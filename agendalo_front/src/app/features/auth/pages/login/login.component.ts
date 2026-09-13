@@ -162,6 +162,7 @@ export class LoginComponent {
           return;
         }
 
+        this.businessService.clearBusiness();
         this.router.navigate(['/app/dashboard']);
       },
       error: (err) => {

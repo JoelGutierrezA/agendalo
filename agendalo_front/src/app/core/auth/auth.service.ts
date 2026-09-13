@@ -79,6 +79,7 @@ export class AuthService {
           data: {
             name: payload.name,
             is_active: false,
+            requested_plan_code: payload.requested_plan_code,
           },
         },
       });

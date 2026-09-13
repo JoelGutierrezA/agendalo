@@ -119,17 +119,19 @@ export class PlatformService {
 
   getPendingRequestsCount(): Observable<any> {
     return defer(async () => {
-      const [pendingProfiles, pendingSubscriptions] = await Promise.all([
-        this.count('profiles', 'is_active', false),
-        this.count('subscription_requests', 'status', 'pending'),
+      const [legacyPendingProfiles, pendingRegistrations, pendingSubscriptions] = await Promise.all([
+        this.getLegacyPendingProfilesData(),
+        this.countIn('registration_requests', 'status', ['pending_approval', 'pending_payment', 'instructions_sent']),
+        this.countIn('subscription_requests', 'status', ['pending', 'instructions_sent']),
       ]);
 
       return {
         success: true,
         data: {
-          pending_profiles: pendingProfiles,
+          pending_profiles: legacyPendingProfiles.length,
+          pending_registrations: pendingRegistrations,
           pending_subscriptions: pendingSubscriptions,
-          total: pendingProfiles + pendingSubscriptions,
+          total: legacyPendingProfiles.length + pendingRegistrations + pendingSubscriptions,
         },
       };
     }).pipe(
@@ -139,14 +141,41 @@ export class PlatformService {
 
   getPendingProfiles(): Observable<any> {
     return defer(async () => {
+      const data = await this.getLegacyPendingProfilesData();
+      return { success: true, data };
+    });
+  }
+
+  getRegistrationRequests(): Observable<any> {
+    return defer(async () => {
       const { data, error } = await this.supabase.client
-        .from('profiles')
-        .select('id, name, email, role, business_id, is_active, created_at, updated_at')
-        .eq('is_active', false)
+        .from('registration_requests')
+        .select(`
+          id,
+          profile_id,
+          requested_plan_code,
+          requested_plan_id,
+          status,
+          approved_at,
+          activation_deadline,
+          payment_confirmed_at,
+          instructions_sent_at,
+          instructions_email_id,
+          activation_email_sent_at,
+          activation_email_id,
+          cancelled_at,
+          included_trial_days,
+          purchased_period_days,
+          plan_price_snapshot,
+          admin_notes,
+          created_at,
+          profile:profiles!registration_requests_profile_id_fkey(name, email),
+          requested_plan:plans!registration_requests_requested_plan_id_fkey(code, name, price_clp, billing_period_days)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw new Error(error.message);
-      return { success: true, data: data ?? [] };
+      return { success: true, data: (data ?? []).map(request => this.mapRegistrationRequest(request)) };
     });
   }
 
@@ -209,6 +238,56 @@ export class PlatformService {
     });
   }
 
+  sendRegistrationPaymentInstructions(requestId: number): Observable<any> {
+    return defer(async () => {
+      const { data: sessionData, error: sessionError } = await this.supabase.client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        throw new Error('Sesion no disponible. Vuelve a iniciar sesion.');
+      }
+
+      const { data, error } = await this.supabase.client.functions.invoke('send-registration-payment-instructions', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: {
+          request_id: requestId,
+        },
+      });
+
+      if (error) throw new Error(await this.getFunctionErrorMessage(error));
+      if (data?.error) throw new Error(data.error);
+
+      return { success: true, data: data?.data };
+    });
+  }
+
+  sendRegistrationActivationEmail(requestId: number): Observable<any> {
+    return defer(async () => {
+      const { data: sessionData, error: sessionError } = await this.supabase.client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        throw new Error('Sesion no disponible. Vuelve a iniciar sesion.');
+      }
+
+      const { data, error } = await this.supabase.client.functions.invoke('send-registration-activation-email', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: {
+          request_id: requestId,
+        },
+      });
+
+      if (error) throw new Error(await this.getFunctionErrorMessage(error));
+      if (data?.error) throw new Error(data.error);
+
+      return { success: true, data: data?.data };
+    });
+  }
+
   completeSubscriptionRequest(requestId: number, adminNotes?: string): Observable<any> {
     return defer(async () => {
       const { data, error } = await this.supabase.client.rpc('complete_subscription_request', {
@@ -232,6 +311,42 @@ export class PlatformService {
 
       if (error) throw new Error(error.message);
       return { success: true, data };
+    });
+  }
+
+  approveTrialRegistrationRequest(requestId: number, adminNotes?: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.rpc('approve_trial_registration_request', {
+        target_request_id: requestId,
+        target_admin_notes: adminNotes ?? null,
+      });
+
+      if (error) throw new Error(error.message);
+      return { success: true, data: this.mapRegistrationRequest(data) };
+    });
+  }
+
+  completePaidRegistrationRequest(requestId: number, adminNotes?: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.rpc('complete_paid_registration_request', {
+        target_request_id: requestId,
+        target_admin_notes: adminNotes ?? null,
+      });
+
+      if (error) throw new Error(error.message);
+      return { success: true, data: this.mapRegistrationRequest(data) };
+    });
+  }
+
+  cancelRegistrationRequest(requestId: number, adminNotes?: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.rpc('cancel_registration_request', {
+        target_request_id: requestId,
+        target_admin_notes: adminNotes ?? null,
+      });
+
+      if (error) throw new Error(error.message);
+      return { success: true, data: this.mapRegistrationRequest(data) };
     });
   }
 
@@ -542,6 +657,35 @@ export class PlatformService {
     return count ?? 0;
   }
 
+  private async countIn(table: string, column: string, values: unknown[]): Promise<number> {
+    const { count, error } = await this.supabase.client
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+      .in(column, values);
+
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  }
+
+  private async getLegacyPendingProfilesData(): Promise<any[]> {
+    const [{ data: profiles, error: profilesError }, { data: registrationRequests, error: requestsError }] = await Promise.all([
+      this.supabase.client
+        .from('profiles')
+        .select('id, name, email, role, business_id, is_active, created_at, updated_at')
+        .eq('is_active', false)
+        .order('created_at', { ascending: false }),
+      this.supabase.client
+        .from('registration_requests')
+        .select('profile_id'),
+    ]);
+
+    if (profilesError) throw new Error(profilesError.message);
+    if (requestsError) throw new Error(requestsError.message);
+
+    const registrationProfileIds = new Set((registrationRequests ?? []).map(request => request.profile_id));
+    return (profiles ?? []).filter(profile => !registrationProfileIds.has(profile.id));
+  }
+
   private mapUserSubscription(user: any): any {
     const subscription = Array.isArray(user.business?.subscription)
       ? user.business.subscription[0] ?? null
@@ -572,6 +716,14 @@ export class PlatformService {
       profile: Array.isArray(request.profile) ? request.profile[0] ?? null : request.profile ?? null,
       business: Array.isArray(request.business) ? request.business[0] ?? null : request.business ?? null,
       current_plan: Array.isArray(request.current_plan) ? request.current_plan[0] ?? null : request.current_plan ?? null,
+      requested_plan: Array.isArray(request.requested_plan) ? request.requested_plan[0] ?? null : request.requested_plan ?? null,
+    };
+  }
+
+  private mapRegistrationRequest(request: any): any {
+    return {
+      ...request,
+      profile: Array.isArray(request.profile) ? request.profile[0] ?? null : request.profile ?? null,
       requested_plan: Array.isArray(request.requested_plan) ? request.requested_plan[0] ?? null : request.requested_plan ?? null,
     };
   }

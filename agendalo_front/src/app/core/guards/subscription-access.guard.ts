@@ -15,9 +15,12 @@ export const subscriptionAccessGuard: CanActivateFn = (_route, state) => {
   }
 
   if (!user?.business_id) {
-    return state.url === '/app/dashboard'
+    const targetUrl = state.url.split('?')[0].split('#')[0];
+    const allowedOnboardingUrls = ['/app/dashboard', '/app/configuracion/negocio'];
+
+    return allowedOnboardingUrls.includes(targetUrl)
       ? true
-      : router.createUrlTree(['/app/dashboard']);
+      : router.createUrlTree(['/app/configuracion/negocio']);
   }
 
   return subscriptionService.ensureLoaded().pipe(

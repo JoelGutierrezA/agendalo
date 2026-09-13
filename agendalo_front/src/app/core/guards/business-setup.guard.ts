@@ -20,6 +20,11 @@ export const businessSetupGuard: CanActivateFn = () => {
     return true;
   }
 
+  if (!user?.business_id) {
+    businessService.clearBusiness();
+    return true;
+  }
+
   if (businessService.hasBusiness()) {
     return true;
   }

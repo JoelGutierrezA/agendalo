@@ -79,7 +79,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
                 </div>
               </div>
             </div>
-            <a routerLink="/registro" class="btn-primary justify-center px-5 py-3 lg:flex-shrink-0">
+            <a routerLink="/registro" [queryParams]="{ plan: 'trial' }" class="btn-primary justify-center px-5 py-3 lg:flex-shrink-0">
               Probar Skedia gratis
             </a>
           </div>
@@ -122,6 +122,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
                 </ul>
                 <a
                   [routerLink]="plan.ctaLink"
+                  [queryParams]="{ plan: plan.code }"
                   class="relative mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
                   [ngClass]="{
                     'bg-surface text-text-primary border border-border hover:bg-gray-50 focus:ring-primary': plan.tone === 'basic',
@@ -164,6 +165,7 @@ import { PublicFooterComponent } from '../../shared/components/public-footer/pub
 export class HomeComponent {
   plans = [
     {
+      code: 'agenda',
       name: 'Agenda',
       description: 'Para profesionales que necesitan ordenar reservas, clientes y servicios.',
       price: '$9.990',
@@ -175,6 +177,7 @@ export class HomeComponent {
       features: ['Agenda y reservas', 'Clientes y servicios', 'Google Calendar', 'Página pública de reservas', 'Ingresos simples'],
     },
     {
+      code: 'premium',
       name: 'Premium',
       description: 'Para negocios que necesitan balance, egresos, insumos e inventario.',
       price: '$19.990',

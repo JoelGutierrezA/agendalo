@@ -17,11 +17,14 @@ export interface LoginRequest {
   password: string;
 }
 
+export type RegistrationPlanCode = 'trial' | 'agenda' | 'premium';
+
 export interface RegisterRequest {
   name: string;
   email: string;
   password: string;
   password_confirmation: string;
+  requested_plan_code?: RegistrationPlanCode;
 }
 
 export interface AuthResponse {
