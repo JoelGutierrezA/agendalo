@@ -9,6 +9,16 @@ import type { GoogleConferenceStatus, ServiceModality } from '../../../models/au
 export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 export type { GoogleConferenceStatus, ServiceModality } from '../../../models/auth.models';
 
+const TERMINAL_APPOINTMENT_STATUSES: AppointmentStatus[] = ['completed', 'cancelled', 'no_show'];
+
+const APPOINTMENT_STATUS_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
+  pending: ['confirmed', 'completed', 'no_show', 'cancelled'],
+  confirmed: ['completed', 'no_show', 'cancelled'],
+  completed: [],
+  cancelled: [],
+  no_show: [],
+};
+
 interface ServiceSnapshot {
   duration_minutes: number;
   price: number;
@@ -31,6 +41,7 @@ export interface AppointmentRow {
   google_meet_url: string | null;
   google_conference_id: string | null;
   google_conference_status: GoogleConferenceStatus;
+  google_event_id: string | null;
   status: AppointmentStatus;
   notes: string | null;
   is_from_public: boolean;
@@ -231,7 +242,7 @@ export class AppointmentsService {
 
     const appointment = this.mapAppointment(data);
     await this.registerCompletedIncome(appointment, null);
-    await this.syncGoogle(appointment.id);
+    await this.syncGoogleIfNeeded(appointment);
     return appointment;
   }
 
@@ -239,6 +250,8 @@ export class AppointmentsService {
     this.assertCanOperate();
     const business = this.requireBusiness();
     const current = await this.find(id);
+    this.assertAllowedStatusTransition(current.status, payload.status);
+
     const service = await this.getService(payload.service_id, business.id);
     const clientId = await this.upsertClient(business.id, payload);
     const serviceChanged = current.service_id !== payload.service_id;
@@ -292,7 +305,7 @@ export class AppointmentsService {
 
     const appointment = this.mapAppointment(data);
     await this.registerCompletedIncome(appointment, current.status);
-    await this.syncGoogle(appointment.id);
+    await this.syncGoogleIfNeeded(appointment);
     return appointment;
   }
 
@@ -300,6 +313,9 @@ export class AppointmentsService {
     this.assertCanOperate();
     const business = this.requireBusiness();
     const oldStatus = appointment.status;
+    this.assertAllowedStatusTransition(oldStatus, status);
+
+    if (oldStatus === status) return appointment;
 
     const { data, error } = await this.supabase.client
       .from('appointments')
@@ -319,12 +335,35 @@ export class AppointmentsService {
 
     const updated = this.mapAppointment(data);
     await this.registerCompletedIncome(updated, oldStatus);
-    await this.syncGoogle(updated.id);
+    await this.syncGoogleIfNeeded(updated);
     return updated;
+  }
+
+  getAllowedStatusTransitions(status: AppointmentStatus): AppointmentStatus[] {
+    return APPOINTMENT_STATUS_TRANSITIONS[status] ?? [];
+  }
+
+  isTerminalStatus(status: AppointmentStatus | string): boolean {
+    return TERMINAL_APPOINTMENT_STATUSES.includes(status as AppointmentStatus);
+  }
+
+  canTransitionStatus(currentStatus: AppointmentStatus, nextStatus: AppointmentStatus): boolean {
+    if (currentStatus === nextStatus) return true;
+    return this.getAllowedStatusTransitions(currentStatus).includes(nextStatus);
   }
 
   async syncPublicAppointment(appointmentId: number): Promise<void> {
     await this.googleCalendarService.syncPublicAppointment(appointmentId).catch(() => undefined);
+  }
+
+  private assertAllowedStatusTransition(currentStatus: AppointmentStatus, nextStatus: AppointmentStatus): void {
+    if (this.canTransitionStatus(currentStatus, nextStatus)) return;
+
+    if (this.isTerminalStatus(currentStatus)) {
+      throw new Error('Esta cita ya esta cerrada y no puede cambiar de estado.');
+    }
+
+    throw new Error('Este cambio de estado no esta permitido.');
   }
 
   private async getService(serviceId: number, businessId: number): Promise<ServiceSnapshot> {
@@ -520,9 +559,15 @@ export class AppointmentsService {
     if (error) throw new Error(error.message);
   }
 
-  private async syncGoogle(appointmentId: number): Promise<void> {
+  private async syncGoogleIfNeeded(appointment: AppointmentRow): Promise<void> {
+    if (!this.shouldSyncGoogle(appointment)) return;
     if (!this.subscriptionService.canOperate()) return;
-    await this.googleCalendarService.syncAppointment(appointmentId).catch(() => undefined);
+    await this.googleCalendarService.syncAppointment(appointment.id).catch(() => undefined);
+  }
+
+  private shouldSyncGoogle(appointment: AppointmentRow): boolean {
+    return appointment.status === 'confirmed'
+      || (appointment.status === 'cancelled' && Boolean(appointment.google_event_id));
   }
 
   private assertCanOperate(): void {

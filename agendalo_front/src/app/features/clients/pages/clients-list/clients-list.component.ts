@@ -202,7 +202,7 @@ interface Client {
                 </div>
 
                 <div>
-                  <label class="form-label">Notas o alergias</label>
+                  <label class="form-label">Notas</label>
                   <textarea formControlName="notes" class="form-input" rows="2" placeholder="Informacion interna..."></textarea>
                 </div>
               </div>

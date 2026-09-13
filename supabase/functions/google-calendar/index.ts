@@ -25,6 +25,12 @@ type GoogleConferenceState = {
   google_conference_status: GoogleConferenceStatus;
 };
 
+type SyncAppointmentResult = {
+  synced: boolean;
+  action?: 'created' | 'updated' | 'deleted';
+  skipped?: string;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-api-version',
@@ -104,8 +110,7 @@ Deno.serve(async (req) => {
     const action = body.action as string | undefined;
 
     if (action === 'sync-public-appointment') {
-      await syncAppointment(Number(body.appointment_id), false);
-      return json({ data: true });
+      return json({ data: await syncAppointment(Number(body.appointment_id), false) });
     }
 
     const context = await requireUserContext(req);
@@ -121,8 +126,7 @@ Deno.serve(async (req) => {
         return json({ data: { connected: false } });
       case 'sync-appointment':
         await assertGoogleOperableForUser(context);
-        await syncAppointment(Number(body.appointment_id), true, context.businessId);
-        return json({ data: true });
+        return json({ data: await syncAppointment(Number(body.appointment_id), true, context.businessId) });
       case 'list-events':
         await assertGoogleOperableForUser(context);
         return json({
@@ -380,7 +384,11 @@ async function disconnect(businessId: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-async function syncAppointment(appointmentId: number, requireExistingBusiness: boolean, expectedBusinessId?: number): Promise<void> {
+async function syncAppointment(
+  appointmentId: number,
+  requireExistingBusiness: boolean,
+  expectedBusinessId?: number
+): Promise<SyncAppointmentResult> {
   if (!Number.isFinite(appointmentId)) throw new Error('appointment_id invalido.');
 
   const { data: appointment, error } = await serviceClient
@@ -402,18 +410,28 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
     throw new Error('No tienes acceso a esta cita.');
   }
 
-  if (!await isBusinessGoogleOperational(Number(appointment.business_id))) return;
+  if (appointment.status !== 'confirmed' && appointment.status !== 'cancelled') {
+    return { synced: false, skipped: `status_${appointment.status}` };
+  }
+
+  if (appointment.status === 'cancelled' && !appointment.google_event_id) {
+    return { synced: false, skipped: 'cancelled_without_google_event' };
+  }
+
+  if (!await isBusinessGoogleOperational(Number(appointment.business_id))) {
+    return { synced: false, skipped: 'google_not_operational' };
+  }
 
   const integration = await getIntegration(Number(appointment.business_id));
-  if (!integration) return;
+  if (!integration) return { synced: false, skipped: 'google_integration_missing' };
 
   if (appointment.status === 'cancelled') {
     await deleteGoogleEvent(appointment, integration);
-    return;
+    return { synced: true, action: 'deleted' };
   }
 
   const accessToken = await getValidAccessToken(integration);
-  if (!accessToken) return;
+  if (!accessToken) return { synced: false, skipped: 'google_access_token_missing' };
 
   const business = Array.isArray(appointment.business) ? appointment.business[0] : appointment.business;
   const settings = Array.isArray(business?.settings) ? business.settings[0] : business?.settings;
@@ -449,7 +467,7 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
     if (existing.status === 'not_found') {
       googleEventId = null;
     } else if (existing.status !== 'ok') {
-      return;
+      return { synced: false, skipped: 'google_event_read_failed' };
     } else {
       const existingEvent = existing.event;
       const existingConference = extractGoogleConferenceState(existingEvent);
@@ -474,12 +492,12 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
         { method: 'PATCH', body: JSON.stringify(payload) }
       );
 
-      if (!update.ok) return;
+      if (!update.ok) return { synced: false, skipped: 'google_event_update_failed' };
 
       const updated = await update.json();
       const conferenceSource = updated?.conferenceData ? updated : existingEvent;
       await persistGoogleConferenceState(appointment.id, conferenceSource, shouldGenerateMeet);
-      return;
+      return { synced: true, action: 'updated' };
     }
   }
 
@@ -495,7 +513,7 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
     { method: 'POST', body: JSON.stringify(payload) }
   );
 
-  if (!create.ok) return;
+  if (!create.ok) return { synced: false, skipped: 'google_event_create_failed' };
 
   const created = await create.json();
   if (created.id) {
@@ -516,7 +534,11 @@ async function syncAppointment(appointmentId: number, requireExistingBusiness: b
         ...conferenceUpdate,
       })
       .eq('id', appointment.id);
+
+    return { synced: true, action: 'created' };
   }
+
+  return { synced: false, skipped: 'google_event_id_missing' };
 }
 
 async function listGoogleEvents(

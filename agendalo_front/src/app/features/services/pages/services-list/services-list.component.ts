@@ -228,11 +228,7 @@ interface Service {
                       <span class="mt-1 block text-xs text-text-secondary">
                         Consultando estado de Google Calendar...
                       </span>
-                    } @else if (googleConnected()) {
-                      <span class="mt-1 block text-xs text-text-secondary">
-                        Skedia creará un enlace de Google Meet al agendar este servicio.
-                      </span>
-                    } @else {
+                    } @else if (!googleConnected()) {
                       <span class="mt-1 block text-xs text-amber-700">
                         Vincula tu cuenta de Google para generar reuniones de Meet automáticamente.
                       </span>
@@ -247,9 +243,16 @@ interface Service {
                   </span>
                 </label>
 
-                @if (!form.value.generate_google_meet) {
+                @if (form.value.generate_google_meet && googleConnected()) {
                   <p class="mt-3 text-xs text-text-secondary">
-                    Recuerda compartir con tu cliente el enlace de la videollamada antes de la sesión.
+                    Skedia creará un enlace de Google Meet al agendar este servicio.
+                  </p>
+                }
+
+                @if (!form.value.generate_google_meet || !googleConnected()) {
+                  <p class="mt-3 text-xs text-text-secondary">
+                    ¿Usarás otra plataforma de videollamada?<br>
+                    Recuerda compartir con tu cliente el enlace de Zoom, Teams u otra plataforma antes de la sesión.
                   </p>
                 }
               </div>

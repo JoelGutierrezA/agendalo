@@ -1,13 +1,16 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
+import Swal from 'sweetalert2';
+import { ToastService } from '../../../../core/services/toast.service';
 import { BusinessService } from '../../../settings/services/business.service';
-import { SubscriptionService } from '../../services/subscription.service';
+import { Plan, SubscriptionService } from '../../services/subscription.service';
 
 interface SubscriptionPlan {
   code: 'agenda' | 'premium';
   name: string;
   price: string;
+  billingPeriodDays?: number;
   description: string;
   highlight?: boolean;
   features: string[];
@@ -36,6 +39,13 @@ interface SubscriptionPlan {
       } @else if (accessNotice() === 'feature') {
         <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Esta funcionalidad esta disponible en Premium. Puedes revisar tu plan actual y solicitar el cambio desde aqui.
+        </div>
+      }
+
+      @if (openSubscriptionRequest()) {
+        <div class="rounded-lg border border-primary/20 bg-primary-light/40 px-4 py-3 text-sm text-text-primary">
+          <p class="font-bold">Ya tienes una solicitud en proceso.</p>
+          <p class="mt-1 text-text-secondary">Espera a que sea revisada antes de crear una nueva.</p>
         </div>
       }
 
@@ -97,9 +107,9 @@ interface SubscriptionPlan {
       </section>
 
       <section id="planes" class="grid grid-cols-1 lg:grid-cols-2 gap-4 scroll-mt-6">
-        @for (plan of plans; track plan.code) {
+        @for (plan of plans(); track plan.code) {
           <article
-            class="card p-5 border transition-all duration-200 hover:shadow-card-hover"
+            class="card p-5 border transition-all duration-200 hover:shadow-card-hover flex min-h-full flex-col"
             [ngClass]="planCardClass(plan)"
           >
             <div class="flex items-start justify-between gap-3">
@@ -118,9 +128,9 @@ interface SubscriptionPlan {
             </div>
 
             <p class="text-3xl font-extrabold text-text-primary mt-5">{{ plan.price }}</p>
-            <p class="text-xs text-text-secondary mt-1">CLP / mes</p>
+            <p class="text-xs text-text-secondary mt-1">{{ planPeriodLabel(plan) }}</p>
 
-            <ul class="mt-5 space-y-2 text-sm text-text-secondary">
+            <ul class="mt-5 mb-6 space-y-2 text-sm text-text-secondary">
               @for (feature of plan.features; track feature) {
                 <li class="flex gap-2">
                   <span class="text-primary font-bold">+</span>
@@ -129,11 +139,18 @@ interface SubscriptionPlan {
               }
             </ul>
 
-            @if (!isCurrentActivePlan(plan)) {
-              <a [href]="planMailto(plan)" class="btn-secondary w-full justify-center mt-6">
+            <button
+              type="button"
+              class="btn-secondary w-full justify-center mt-auto disabled:cursor-not-allowed disabled:opacity-50"
+              [disabled]="isPlanRequestDisabled()"
+              (click)="requestPlan(plan)"
+            >
+              @if (submittingPlanCode() === plan.code) {
+                Enviando...
+              } @else {
                 {{ planCtaLabel(plan) }}
-              </a>
-            }
+              }
+            </button>
           </article>
         }
       </section>
@@ -145,10 +162,12 @@ export class SubscriptionComponent implements OnInit {
   businessName = computed(() => this.businessService.currentBusiness()?.name ?? 'Mi negocio');
   businessEmail = computed(() => this.businessService.currentBusiness()?.email ?? 'contacto@skedia.cl');
   currentSubscription = computed(() => this.subscriptionService.currentSubscription());
+  openSubscriptionRequest = computed(() => this.subscriptionService.openSubscriptionRequest());
   subscriptionStatusLabel = computed(() => this.subscriptionService.statusLabel());
   currentPlanCode = computed(() => this.currentSubscription()?.plan?.code ?? '');
   isTrial = computed(() => this.currentSubscription()?.status === 'trialing');
   isActive = computed(() => this.currentSubscription()?.status === 'active');
+  submittingPlanCode = signal<string | null>(null);
 
   statusTitle = computed(() => {
     const subscription = this.currentSubscription();
@@ -231,7 +250,7 @@ export class SubscriptionComponent implements OnInit {
     return ['Agenda y citas', 'Reservas online', 'Clientes y servicios'];
   });
 
-  plans: SubscriptionPlan[] = [
+  private readonly planContent: SubscriptionPlan[] = [
     {
       code: 'agenda',
       name: 'Agenda',
@@ -268,11 +287,32 @@ export class SubscriptionComponent implements OnInit {
   constructor(
     private businessService: BusinessService,
     private subscriptionService: SubscriptionService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private toastService: ToastService
   ) {}
+
+  plans = computed<SubscriptionPlan[]>(() => {
+    const dbPlans = this.subscriptionService.availablePlans();
+
+    return this.planContent.map(plan => {
+      const dbPlan = dbPlans.find(current => current.code === plan.code);
+
+      if (!dbPlan) return plan;
+
+      return {
+        ...plan,
+        name: dbPlan.name,
+        price: this.subscriptionService.formatPrice(dbPlan),
+        billingPeriodDays: dbPlan.billing_period_days,
+        description: dbPlan.description || plan.description,
+      };
+    });
+  });
 
   ngOnInit(): void {
     this.subscriptionService.loadCurrent().subscribe({ error: () => undefined });
+    this.subscriptionService.loadPlans().subscribe({ error: () => undefined });
+    this.subscriptionService.loadOpenSubscriptionRequest().subscribe({ error: () => undefined });
     this.route.queryParamMap.subscribe(params => {
       if (params.has('subscriptionRequired')) {
         this.accessNotice.set('expired');
@@ -316,20 +356,74 @@ export class SubscriptionComponent implements OnInit {
   }
 
   planCtaLabel(plan: SubscriptionPlan): string {
-    if (this.isTrial()) return `Solicitar ${plan.name}`;
-    if (this.currentPlanCode() === 'agenda' && plan.code === 'premium') return 'Solicitar cambio a Premium';
-    if (this.currentPlanCode() === 'premium' && plan.code === 'agenda') return 'Consultar cambio de plan';
+    const subscription = this.currentSubscription();
+    const effectiveState = this.subscriptionService.effectiveState(subscription);
 
-    return `Renovar con ${plan.name}`;
+    if (!subscription || effectiveState === 'grace' || effectiveState === 'expired' || this.isTrial()) {
+      return `Solicitar ${plan.name}`;
+    }
+
+    if (effectiveState === 'active' && this.currentPlanCode() === plan.code) return `Renovar ${plan.name}`;
+    if (effectiveState === 'active' && this.currentPlanCode() && this.currentPlanCode() !== plan.code) return `Cambiar a ${plan.name}`;
+
+    return `Solicitar ${plan.name}`;
   }
 
-  planMailto(plan: SubscriptionPlan): string {
-    const subject = encodeURIComponent(`${this.planCtaLabel(plan)} - ${this.businessName()}`);
-    const body = encodeURIComponent(
-      `Hola, quiero revisar mi suscripcion de Skedia.\n\nNegocio: ${this.businessName()}\nPlan de interes: ${plan.name}\nCorreo del negocio: ${this.businessEmail()}\n`
-    );
+  planPeriodLabel(plan: SubscriptionPlan): string {
+    if (!plan.billingPeriodDays) return 'CLP / periodo del plan';
 
-    return `mailto:contacto@skedia.cl?subject=${subject}&body=${body}`;
+    return plan.billingPeriodDays === 1
+      ? 'CLP / 1 dia'
+      : `CLP / ${plan.billingPeriodDays} dias`;
+  }
+
+  isPlanRequestDisabled(): boolean {
+    return !!this.openSubscriptionRequest() || this.submittingPlanCode() !== null;
+  }
+
+  async requestPlan(plan: SubscriptionPlan): Promise<void> {
+    if (this.openSubscriptionRequest()) {
+      this.showOpenRequestMessage();
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: this.confirmationTitle(plan),
+      html: this.confirmationHtml(plan),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: this.confirmationButtonText(plan),
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.submittingPlanCode.set(plan.code);
+    this.subscriptionService.createSubscriptionRequest(plan.code).subscribe({
+      next: () => {
+        void Swal.fire({
+          title: 'Solicitud enviada',
+          text: 'Recibimos tu solicitud. Te enviaremos por correo las instrucciones para continuar. Tu suscripcion actual no cambiara hasta que el proceso sea confirmado.',
+          icon: 'success',
+          confirmButtonText: 'Entendido',
+        });
+        this.subscriptionService.loadOpenSubscriptionRequest().subscribe({ error: () => undefined });
+        this.submittingPlanCode.set(null);
+      },
+      error: (err) => {
+        this.submittingPlanCode.set(null);
+        const message = this.requestErrorMessage(err?.message);
+        this.toastService.error(message);
+        void Swal.fire({
+          title: 'No se pudo enviar la solicitud',
+          text: message,
+          icon: 'error',
+          confirmButtonText: 'Entendido',
+        });
+      },
+    });
   }
 
   subscriptionStatusClass(): string {
@@ -382,5 +476,85 @@ export class SubscriptionComponent implements OnInit {
     if (days >= 2 && days <= 5) return 'warning';
 
     return 'normal';
+  }
+
+  private confirmationTitle(plan: SubscriptionPlan): string {
+    const label = this.planCtaLabel(plan);
+
+    if (label.startsWith('Renovar')) return `¿${label}?`;
+    if (label.startsWith('Cambiar')) return `¿${label}?`;
+
+    return `¿Solicitar plan ${plan.name}?`;
+  }
+
+  private confirmationButtonText(plan: SubscriptionPlan): string {
+    const label = this.planCtaLabel(plan).toLowerCase();
+    return `Si, ${label}`;
+  }
+
+  private confirmationHtml(plan: SubscriptionPlan): string {
+    const currentSituation = this.currentSituationText();
+    const days = this.subscriptionService.daysRemaining(this.currentSubscription());
+    const daysText = days === 1 ? '1 dia' : `${days} dias`;
+    const preservation = this.preservationText(plan, daysText);
+    const period = plan.billingPeriodDays
+      ? plan.billingPeriodDays === 1 ? '1 dia' : `${plan.billingPeriodDays} dias`
+      : 'periodo definido para el plan';
+
+    return `
+      <div class="text-left space-y-3">
+        <p>${currentSituation} y te quedan <strong>${daysText}</strong>.</p>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p><strong>Plan solicitado:</strong> ${plan.name}</p>
+          <p><strong>Precio:</strong> ${plan.price}</p>
+          <p><strong>Periodo:</strong> ${period}</p>
+        </div>
+        <p>${preservation}</p>
+      </div>
+    `;
+  }
+
+  private currentSituationText(): string {
+    const subscription = this.currentSubscription();
+    const effectiveState = this.subscriptionService.effectiveState(subscription);
+
+    if (!subscription) return 'Actualmente no tienes una suscripcion activa';
+    if (subscription.status === 'trialing' && effectiveState === 'active') return 'Actualmente estas en tu prueba gratuita';
+    if (effectiveState === 'grace' || effectiveState === 'expired') return `Actualmente tu ${this.subscriptionService.planLabel(subscription)} no esta activa`;
+
+    return `Actualmente tienes ${subscription.plan?.name ?? 'tu plan'}`;
+  }
+
+  private preservationText(plan: SubscriptionPlan, daysText: string): string {
+    const label = this.planCtaLabel(plan);
+
+    if (label.startsWith('Cambiar')) {
+      return `Al completar el cambio, pasaras a ${plan.name} y conservaras todos tus dias restantes.`;
+    }
+
+    if (label.startsWith('Renovar')) {
+      return `Al renovar, esos ${daysText} se conservaran y se sumaran al nuevo periodo.`;
+    }
+
+    return `Si continuas con ${plan.name}, esos ${daysText} se conservaran y se sumaran al nuevo periodo del plan.`;
+  }
+
+  private showOpenRequestMessage(): void {
+    void Swal.fire({
+      title: 'Ya tienes una solicitud en proceso',
+      text: 'Espera a que sea revisada antes de crear una nueva.',
+      icon: 'info',
+      confirmButtonText: 'Entendido',
+    });
+  }
+
+  private requestErrorMessage(message: string | undefined): string {
+    const normalized = (message ?? '').toLowerCase();
+
+    if (normalized.includes('ya existe una solicitud')) {
+      return 'Ya tienes una solicitud en proceso. Espera a que sea revisada antes de crear una nueva.';
+    }
+
+    return message || 'No se pudo enviar la solicitud. Intenta nuevamente.';
   }
 }

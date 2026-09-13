@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
 import { combineLatest, startWith } from 'rxjs';
+import Swal from 'sweetalert2';
 import { DashboardService, DashboardSummary } from '../../../../core/services/dashboard.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { BusinessService } from '../../../settings/services/business.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
-import { AppointmentFilters, AppointmentRow, AppointmentsService } from '../../../appointments/services/appointments.service';
+import { AppointmentFilters, AppointmentRow, AppointmentStatus, AppointmentsService } from '../../../appointments/services/appointments.service';
 import { FeatureKey, SubscriptionService, TrialPresentation } from '../../../subscription/services/subscription.service';
 
 interface ExpenseCategory {
@@ -157,7 +158,6 @@ interface OpeningHour {
           <form
             class="grid-cols-1 gap-3 xl:grid xl:grid-cols-[minmax(220px,1fr)_160px_160px_220px_auto] xl:items-end"
             [ngClass]="appointmentFiltersExpanded ? 'grid mt-4 xl:mt-0' : 'hidden xl:grid'"
-            (ngSubmit)="applyAppointmentFilters()"
           >
             <div>
               <label class="text-xs text-text-secondary font-medium mb-1 block">Buscar</label>
@@ -165,7 +165,8 @@ interface OpeningHour {
                 type="text"
                 name="dashboardAppointmentSearch"
                 [(ngModel)]="appointmentFilters.search"
-                class="form-input w-full"
+                (ngModelChange)="onAppointmentFilterChange()"
+                class="form-input h-10 w-full"
                 placeholder="Nombre, email o teléfono..."
               />
             </div>
@@ -174,8 +175,8 @@ interface OpeningHour {
               <select
                 name="dashboardAppointmentStatus"
                 [(ngModel)]="appointmentFilters.status"
-                (change)="loadAppointments()"
-                class="form-input w-full"
+                (ngModelChange)="onAppointmentFilterChange()"
+                class="form-input h-10 w-full"
               >
                 <option value="">Todos los estados</option>
                 <option value="pending">Pendiente</option>
@@ -191,8 +192,8 @@ interface OpeningHour {
                 type="date"
                 name="dashboardAppointmentDate"
                 [(ngModel)]="appointmentFilters.date"
-                (change)="loadAppointments()"
-                class="form-input w-full"
+                (ngModelChange)="onAppointmentFilterChange()"
+                class="form-input h-10 w-full"
               />
             </div>
             <div>
@@ -200,14 +201,21 @@ interface OpeningHour {
               <select
                 name="dashboardAppointmentSort"
                 [(ngModel)]="appointmentFilters.sort_by"
-                (change)="loadAppointments()"
-                class="form-input w-full"
+                (ngModelChange)="onAppointmentFilterChange()"
+                class="form-input h-10 w-full"
               >
                 <option value="scheduled_at">Fecha de la cita</option>
                 <option value="created_at">Fecha de creación</option>
               </select>
             </div>
-            <button type="submit" class="btn-secondary h-[42px] justify-center px-6">Filtrar</button>
+            <button
+              type="button"
+              class="btn-secondary h-10 justify-center px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              [disabled]="!hasActiveAppointmentFilters()"
+              (click)="clearAppointmentFilters()"
+            >
+              Limpiar filtros
+            </button>
           </form>
         </div>
 
@@ -268,16 +276,42 @@ interface OpeningHour {
                         {{ formatPrice(apt.service_price) }}
                       </td>
                       <td class="px-4 py-3 text-center">
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                          [ngClass]="{
-                            'bg-blue-100 text-blue-700': apt.status === 'confirmed',
-                            'bg-yellow-100 text-yellow-700': apt.status === 'pending',
-                            'bg-green-100 text-green-700': apt.status === 'completed',
-                            'bg-red-100 text-red-700': apt.status === 'cancelled',
-                            'bg-gray-100 text-gray-700': apt.status === 'no_show'
-                          }">
-                          {{ getStatusLabel(apt.status) }}
-                        </span>
+                        @if (canOpenStatusMenu(apt)) {
+                          <div class="relative inline-flex justify-center">
+                            <button
+                              type="button"
+                              class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition ring-offset-2 hover:ring-2 hover:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70"
+                              [ngClass]="statusBadgeClass(apt.status)"
+                              [disabled]="statusUpdatingAppointmentId === apt.id"
+                              [attr.aria-expanded]="statusMenuAppointmentId === apt.id"
+                              aria-haspopup="menu"
+                              (click)="toggleStatusMenu(apt)"
+                            >
+                              <span>{{ statusUpdatingAppointmentId === apt.id ? 'Guardando...' : getStatusLabel(apt.status) }}</span>
+                              <span class="ml-1 text-[10px]" aria-hidden="true">▼</span>
+                            </button>
+
+                            @if (statusMenuAppointmentId === apt.id) {
+                              <div class="absolute left-1/2 top-full z-30 mt-2 w-40 -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-white py-1 text-left shadow-lg" role="menu">
+                                @for (status of allowedStatusTransitions(apt.status); track status) {
+                                  <button
+                                    type="button"
+                                    class="block w-full px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    [disabled]="statusUpdatingAppointmentId === apt.id"
+                                    (click)="changeAppointmentStatus(apt, status)"
+                                    role="menuitem"
+                                  >
+                                    {{ getStatusActionLabel(status) }}
+                                  </button>
+                                }
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap" [ngClass]="statusBadgeClass(apt.status)">
+                            {{ getStatusLabel(apt.status) }}
+                          </span>
+                        }
                       </td>
                       <td class="px-4 py-3 text-right">
                         <button
@@ -389,16 +423,6 @@ interface OpeningHour {
                       @for (time of appointmentTimeOptions; track time) {
                         <option [value]="time">{{ time }}</option>
                       }
-                    </select>
-                  </div>
-                  <div class="col-span-2">
-                    <label class="form-label">Estado *</label>
-                    <select formControlName="status" class="form-input">
-                      <option value="pending">Pendiente</option>
-                      <option value="confirmed">Confirmada</option>
-                      <option value="completed">Completada</option>
-                      <option value="no_show">No asistió</option>
-                      <option value="cancelled">Cancelada</option>
                     </select>
                   </div>
                 </div>
@@ -576,10 +600,13 @@ export class DashboardComponent implements OnInit {
   showAppointmentModal = false;
   saving = false;
   appointmentSaving = false;
+  statusMenuAppointmentId: number | null = null;
+  statusUpdatingAppointmentId: number | null = null;
   appointmentModalLoading = false;
   newCatName = '';
   copyLinkLabel = 'Copiar enlace';
   selectedAppointmentId: number | null = null;
+  selectedAppointmentStatus: AppointmentStatus | null = null;
   appointmentErrorMessage = '';
   appointmentOutsideHoursWarning = false;
   openingHours: OpeningHour[] = [];
@@ -595,13 +622,15 @@ export class DashboardComponent implements OnInit {
     { label: 'Balance', value: '$0', iconPath: 'assets/Interfaz/Dashboard.png', iconBg: '#F8FAFC', trend: 'Mensual', trendColor: 'text-text-secondary', feature: 'balance' as FeatureKey },
   ];
 
-  appointmentFilters: AppointmentFilters = {
+  readonly initialAppointmentFilters: AppointmentFilters = {
     search: '',
     status: '',
     date: '',
     sort_by: 'scheduled_at',
     sort_dir: 'desc',
   };
+
+  appointmentFilters: AppointmentFilters = { ...this.initialAppointmentFilters };
 
   constructor(
     private fb: FormBuilder,
@@ -829,6 +858,68 @@ export class DashboardComponent implements OnInit {
     return labels[status] ?? status;
   }
 
+  getStatusActionLabel(status: AppointmentStatus): string {
+    const labels: Record<AppointmentStatus, string> = {
+      pending: 'Marcar pendiente',
+      confirmed: 'Confirmar',
+      completed: 'Completar',
+      no_show: 'No asistió',
+      cancelled: 'Cancelar',
+    };
+
+    return labels[status];
+  }
+
+  statusBadgeClass(status: string): Record<string, boolean> {
+    return {
+      'bg-blue-100 text-blue-700': status === 'confirmed',
+      'bg-yellow-100 text-yellow-700': status === 'pending',
+      'bg-green-100 text-green-700': status === 'completed',
+      'bg-red-100 text-red-700': status === 'cancelled',
+      'bg-gray-100 text-gray-700': status === 'no_show',
+    };
+  }
+
+  canOpenStatusMenu(appointment: { status: AppointmentStatus }): boolean {
+    return this.canOperate()
+      && !this.appointmentsService.isTerminalStatus(appointment.status)
+      && this.allowedStatusTransitions(appointment.status).length > 0;
+  }
+
+  toggleStatusMenu(appointment: { id: number; status: AppointmentStatus }): void {
+    if (!this.canOpenStatusMenu(appointment) || this.statusUpdatingAppointmentId === appointment.id) return;
+    this.statusMenuAppointmentId = this.statusMenuAppointmentId === appointment.id ? null : appointment.id;
+  }
+
+  allowedStatusTransitions(status: AppointmentStatus): AppointmentStatus[] {
+    return this.appointmentsService.getAllowedStatusTransitions(status);
+  }
+
+  async changeAppointmentStatus(appointment: any, status: AppointmentStatus): Promise<void> {
+    if (!this.assertOperationAllowed()) return;
+    if (this.statusUpdatingAppointmentId === appointment.id) return;
+
+    this.statusMenuAppointmentId = null;
+
+    if (!await this.confirmAppointmentStatusChange(status)) {
+      return;
+    }
+
+    this.statusUpdatingAppointmentId = appointment.id;
+
+    try {
+      const updated = await this.appointmentsService.updateStatus(appointment, status);
+      const index = this.upcomingAppointments.findIndex(item => item.id === appointment.id);
+      if (index !== -1) this.upcomingAppointments[index] = this.mapAppointment(updated);
+      this.toastService.success(`Cita marcada como ${this.getStatusLabel(status)}`);
+      this.loadData();
+    } catch (error: any) {
+      this.toastService.error(error?.message ?? 'No se pudo cambiar el estado.');
+    } finally {
+      this.statusUpdatingAppointmentId = null;
+    }
+  }
+
   formatPrice(value: unknown): string {
     const amount = Number(value);
     const safeAmount = Number.isFinite(amount) ? amount : 0;
@@ -838,10 +929,27 @@ export class DashboardComponent implements OnInit {
     }).format(safeAmount)}`;
   }
 
-  applyAppointmentFilters(): void {
-    this.appointmentFiltersExpanded = false;
+  onAppointmentFilterChange(): void {
     this.appointmentPage = 1;
     void this.loadAppointments();
+  }
+
+  clearAppointmentFilters(): void {
+    if (!this.hasActiveAppointmentFilters()) return;
+
+    this.appointmentFilters = { ...this.initialAppointmentFilters };
+    this.appointmentPage = 1;
+    void this.loadAppointments();
+  }
+
+  hasActiveAppointmentFilters(): boolean {
+    return Boolean(
+      this.appointmentFilters.search?.trim()
+      || this.appointmentFilters.status
+      || this.appointmentFilters.date
+      || this.appointmentFilters.sort_by !== this.initialAppointmentFilters.sort_by
+      || this.appointmentFilters.sort_dir !== this.initialAppointmentFilters.sort_dir
+    );
   }
 
   toggleAppointmentFilters(): void {
@@ -929,6 +1037,7 @@ export class DashboardComponent implements OnInit {
     this.appointmentModalLoading = true;
     this.appointmentErrorMessage = '';
     this.selectedAppointmentId = appointmentId;
+    this.selectedAppointmentStatus = null;
     this.appointmentForm.reset({ status: 'pending' });
 
     try {
@@ -938,6 +1047,7 @@ export class DashboardComponent implements OnInit {
 
       const appointment = await this.appointmentsService.find(appointmentId);
       const date = new Date(appointment.scheduled_at);
+      this.selectedAppointmentStatus = appointment.status;
 
       this.appointmentForm.patchValue({
         client_name: appointment.client_name,
@@ -966,6 +1076,7 @@ export class DashboardComponent implements OnInit {
     this.appointmentModalLoading = false;
     this.appointmentSaving = false;
     this.selectedAppointmentId = null;
+    this.selectedAppointmentStatus = null;
     this.appointmentErrorMessage = '';
     this.appointmentOutsideHoursWarning = false;
   }
@@ -983,13 +1094,15 @@ export class DashboardComponent implements OnInit {
 
     try {
       const value = this.appointmentForm.value;
+      const preservedStatus = this.selectedAppointmentStatus ?? (value.status as AppointmentStatus);
+
       await this.appointmentsService.update(this.selectedAppointmentId, {
         client_name: value.client_name,
         client_email: value.client_email || null,
         client_phone: value.client_phone || null,
         service_id: Number(value.service_id),
         scheduled_at: new Date(`${value.date}T${value.time}:00`).toISOString(),
-        status: value.status,
+        status: preservedStatus,
         notes: value.notes || null,
       });
 
@@ -1002,6 +1115,59 @@ export class DashboardComponent implements OnInit {
     } finally {
       this.appointmentSaving = false;
     }
+  }
+
+  private async confirmAppointmentStatusChange(status: AppointmentStatus): Promise<boolean> {
+    const config = this.statusConfirmationConfig(status);
+    if (!config) return true;
+
+    const result = await Swal.fire({
+      title: config.title,
+      text: config.text,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: config.confirmButtonText,
+      cancelButtonText: config.cancelButtonText,
+      reverseButtons: true,
+    });
+
+    return result.isConfirmed;
+  }
+
+  private statusConfirmationConfig(status: AppointmentStatus): {
+    title: string;
+    text: string;
+    confirmButtonText: string;
+    cancelButtonText: string;
+  } | null {
+    if (status === 'completed') {
+      return {
+        title: '¿Marcar esta cita como completada?',
+        text: 'La cita quedará registrada como realizada y se generará el ingreso correspondiente al servicio.',
+        confirmButtonText: 'Sí, marcar como completada',
+        cancelButtonText: 'Cancelar',
+      };
+    }
+
+    if (status === 'no_show') {
+      return {
+        title: '¿Marcar que el cliente no asistió?',
+        text: 'La cita quedará cerrada con estado “No asistió” y no podrá cambiarse desde el selector de estado.',
+        confirmButtonText: 'Sí, marcar como no asistió',
+        cancelButtonText: 'Cancelar',
+      };
+    }
+
+    if (status === 'cancelled') {
+      return {
+        title: '¿Cancelar esta cita?',
+        text: 'La cita quedará cancelada y no podrá cambiarse después desde el selector de estado.',
+        confirmButtonText: 'Sí, cancelar cita',
+        cancelButtonText: 'Volver',
+      };
+    }
+
+    return null;
   }
 
   private async loadAppointmentServices(): Promise<void> {

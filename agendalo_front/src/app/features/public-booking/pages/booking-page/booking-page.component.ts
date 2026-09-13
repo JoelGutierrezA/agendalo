@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { SupabaseService } from '../../../../core/services/supabase.service';
-import { GoogleCalendarService } from '../../../settings/services/google-calendar.service';
 import type { ServiceModality } from '../../../../models/auth.models';
 
 interface BusinessPublic {
@@ -294,8 +293,7 @@ export class BookingPageComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private fb: FormBuilder,
-    private supabase: SupabaseService,
-    private googleCalendarService: GoogleCalendarService
+    private supabase: SupabaseService
   ) {
     this.bookingForm = this.fb.group({
       client_name: ['', Validators.required],
@@ -431,7 +429,6 @@ export class BookingPageComponent implements OnInit {
     }
 
     const appointmentId = Number(data);
-    await this.googleCalendarService.syncPublicAppointment(appointmentId).catch(() => undefined);
     await this.notifyBusiness(appointmentId);
 
     this.router.navigate(['/negocio', this.slug, 'confirmacion'], {

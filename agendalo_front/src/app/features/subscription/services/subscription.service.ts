@@ -18,8 +18,10 @@ export type FeatureKey =
   | 'inventory';
 
 export interface Plan {
+  id?: number;
   code: 'agenda' | 'premium' | string;
   name: string;
+  description?: string | null;
   price_clp: number;
   billing_period_days?: number;
   features: Partial<Record<FeatureKey, boolean>>;
@@ -32,6 +34,17 @@ export interface BusinessSubscription {
   trial_ends_at: string | null;
   cancelled_at?: string | null;
   plan: Plan | null;
+}
+
+export interface SubscriptionRequest {
+  id: number;
+  business_id: number;
+  profile_id: string;
+  request_type: 'subscription_activation' | 'subscription_renewal' | 'subscription_change' | string;
+  status: 'pending' | 'instructions_sent' | 'completed' | 'cancelled' | string;
+  remaining_days_snapshot: number;
+  requested_period_days: number;
+  created_at: string;
 }
 
 export type TrialTone = 'normal' | 'warning' | 'urgent';
@@ -66,7 +79,10 @@ export interface GracePeriodPresentation {
 @Injectable({ providedIn: 'root' })
 export class SubscriptionService {
   currentSubscription = signal<BusinessSubscription | null>(null);
+  availablePlans = signal<Plan[]>([]);
+  openSubscriptionRequest = signal<SubscriptionRequest | null>(null);
   loading = signal(false);
+  requestLoading = signal(false);
   private loadedBusinessId: number | null = null;
   private readonly gracePeriodDays = 10;
 
@@ -126,6 +142,62 @@ export class SubscriptionService {
         this.loadedBusinessId = this.businessService.currentBusiness()?.id ?? null;
       }),
       finalize(() => this.loading.set(false))
+    );
+  }
+
+  loadPlans(): Observable<Plan[]> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client
+        .from('plans')
+        .select('id, code, name, description, price_clp, billing_period_days, features')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true });
+
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(plan => this.mapPlan(plan));
+    }).pipe(
+      tap(plans => this.availablePlans.set(plans))
+    );
+  }
+
+  loadOpenSubscriptionRequest(): Observable<SubscriptionRequest | null> {
+    return defer(async () => {
+      const businessId = this.businessService.currentBusiness()?.id;
+
+      if (!businessId || this.authService.currentUser()?.role === 'admin_platform') {
+        return null;
+      }
+
+      const { data, error } = await this.supabase.client
+        .from('subscription_requests')
+        .select('id, business_id, profile_id, request_type, status, remaining_days_snapshot, requested_period_days, created_at')
+        .eq('business_id', businessId)
+        .in('status', ['pending', 'instructions_sent'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw new Error(error.message);
+      return data as SubscriptionRequest | null;
+    }).pipe(
+      tap(request => this.openSubscriptionRequest.set(request))
+    );
+  }
+
+  createSubscriptionRequest(planCode: string, notes?: string): Observable<SubscriptionRequest> {
+    return defer(async () => {
+      this.requestLoading.set(true);
+
+      const { data, error } = await this.supabase.client.rpc('create_subscription_request', {
+        target_plan_code: planCode,
+        target_notes: notes ?? null,
+      });
+
+      if (error) throw new Error(error.message);
+      return data as SubscriptionRequest;
+    }).pipe(
+      tap(request => this.openSubscriptionRequest.set(request)),
+      finalize(() => this.requestLoading.set(false))
     );
   }
 
@@ -349,12 +421,20 @@ export class SubscriptionService {
       trial_ends_at: row.trial_ends_at,
       cancelled_at: row.cancelled_at,
       plan: plan ? {
-        code: plan.code,
-        name: plan.name,
-        price_clp: plan.price_clp,
-        billing_period_days: plan.billing_period_days,
-        features: plan.features ?? {},
+        ...this.mapPlan(plan),
       } : null,
+    };
+  }
+
+  private mapPlan(row: any): Plan {
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      description: row.description ?? null,
+      price_clp: row.price_clp,
+      billing_period_days: row.billing_period_days,
+      features: row.features ?? {},
     };
   }
 

@@ -1,11 +1,12 @@
-import { Injectable } from '@angular/core';
-import { defer, Observable } from 'rxjs';
+import { Injectable, signal } from '@angular/core';
+import { defer, Observable, tap } from 'rxjs';
 import { SupabaseService } from '../../../core/services/supabase.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class PlatformService {
+  pendingRequestsCount = signal(0);
   private readonly perPage = 10;
 
   constructor(private supabase: SupabaseService) { }
@@ -113,6 +114,124 @@ export class PlatformService {
       }
 
       return this.paginated((data ?? []).map(user => this.mapUserSubscription(user)), count ?? 0, page);
+    });
+  }
+
+  getPendingRequestsCount(): Observable<any> {
+    return defer(async () => {
+      const [pendingProfiles, pendingSubscriptions] = await Promise.all([
+        this.count('profiles', 'is_active', false),
+        this.count('subscription_requests', 'status', 'pending'),
+      ]);
+
+      return {
+        success: true,
+        data: {
+          pending_profiles: pendingProfiles,
+          pending_subscriptions: pendingSubscriptions,
+          total: pendingProfiles + pendingSubscriptions,
+        },
+      };
+    }).pipe(
+      tap(res => this.pendingRequestsCount.set(res.data.total))
+    );
+  }
+
+  getPendingProfiles(): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client
+        .from('profiles')
+        .select('id, name, email, role, business_id, is_active, created_at, updated_at')
+        .eq('is_active', false)
+        .order('created_at', { ascending: false });
+
+      if (error) throw new Error(error.message);
+      return { success: true, data: data ?? [] };
+    });
+  }
+
+  getSubscriptionRequests(): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client
+        .from('subscription_requests')
+        .select(`
+          id,
+          business_id,
+          profile_id,
+          request_type,
+          status,
+          current_subscription_status,
+          current_ends_at,
+          remaining_days_snapshot,
+          requested_period_days,
+          notes,
+          admin_notes,
+          instructions_sent_at,
+          instructions_email_id,
+          completed_at,
+          cancelled_at,
+          created_at,
+          profile:profiles!subscription_requests_profile_id_fkey(name, email),
+          business:businesses!subscription_requests_business_id_fkey(name, slug),
+          current_plan:plans!subscription_requests_current_plan_id_fkey(code, name, price_clp),
+          requested_plan:plans!subscription_requests_requested_plan_id_fkey(code, name, price_clp, billing_period_days)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw new Error(error.message);
+      return { success: true, data: (data ?? []).map(request => this.mapSubscriptionRequest(request)) };
+    });
+  }
+
+  sendSubscriptionInstructions(requestId: number): Observable<any> {
+    return defer(async () => {
+      const { data: sessionData, error: sessionError } = await this.supabase.client.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        throw new Error('Sesion no disponible. Vuelve a iniciar sesion.');
+      }
+
+      const { data, error } = await this.supabase.client.functions.invoke('send-subscription-instructions', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: {
+          request_id: requestId,
+        },
+      });
+
+      if (error) throw new Error(await this.getFunctionErrorMessage(error));
+      if (data?.error) throw new Error(data.error);
+
+      return { success: true, data: data?.data };
+    });
+  }
+
+  completeSubscriptionRequest(requestId: number, adminNotes?: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.rpc('complete_subscription_request', {
+        target_request_id: requestId,
+        target_admin_notes: adminNotes ?? null,
+      });
+
+      if (error) throw new Error(error.message);
+
+      const result = Array.isArray(data) ? data[0] ?? null : data;
+      return { success: true, data: result };
+    });
+  }
+
+  cancelSubscriptionRequest(requestId: number, adminNotes?: string): Observable<any> {
+    return defer(async () => {
+      const { data, error } = await this.supabase.client.rpc('cancel_subscription_request', {
+        target_request_id: requestId,
+        target_admin_notes: adminNotes ?? null,
+      });
+
+      if (error) throw new Error(error.message);
+      return { success: true, data };
     });
   }
 
@@ -444,6 +563,16 @@ export class PlatformService {
     return {
       ...subscription,
       plan,
+    };
+  }
+
+  private mapSubscriptionRequest(request: any): any {
+    return {
+      ...request,
+      profile: Array.isArray(request.profile) ? request.profile[0] ?? null : request.profile ?? null,
+      business: Array.isArray(request.business) ? request.business[0] ?? null : request.business ?? null,
+      current_plan: Array.isArray(request.current_plan) ? request.current_plan[0] ?? null : request.current_plan ?? null,
+      requested_plan: Array.isArray(request.requested_plan) ? request.requested_plan[0] ?? null : request.requested_plan ?? null,
     };
   }
 

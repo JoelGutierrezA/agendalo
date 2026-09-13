@@ -117,18 +117,15 @@ interface Service {
             <textarea formControlName="notes" class="form-input" rows="3" placeholder="Notas internas sobre esta cita..."></textarea>
           </div>
 
-          <div>
-            <label class="form-label">Estado</label>
-            <select formControlName="status" class="form-input">
-              <option value="pending">Pendiente</option>
-              <option value="confirmed">Confirmada</option>
-              @if (isEditing) {
-                <option value="completed">Completada (registra ingreso)</option>
-                <option value="no_show">No asistió</option>
-                <option value="cancelled">Cancelada</option>
-              }
-            </select>
-          </div>
+          @if (!isEditing) {
+            <div>
+              <label class="form-label">Estado</label>
+              <select formControlName="status" class="form-input">
+                <option value="pending">Pendiente</option>
+                <option value="confirmed">Confirmada</option>
+              </select>
+            </div>
+          }
 
           @if (errorMessage) {
             <div class="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
@@ -153,6 +150,7 @@ export class AppointmentFormComponent implements OnInit {
 
   isEditing = false;
   appointmentId: number | null = null;
+  currentAppointmentStatus: AppointmentStatus | null = null;
 
   loadingData = true;
   saving = false;
@@ -306,6 +304,7 @@ export class AppointmentFormComponent implements OnInit {
       const dateObj = new Date(apt.scheduled_at);
       const dateStr = dateObj.toLocaleDateString('en-CA');
       const timeStr = dateObj.toTimeString().substring(0, 5);
+      this.currentAppointmentStatus = apt.status;
 
       this.form.patchValue({
         client_name: apt.client_name,
@@ -339,13 +338,17 @@ export class AppointmentFormComponent implements OnInit {
     this.saving = true;
     this.errorMessage = '';
 
+    const status = this.isEditing
+      ? this.currentAppointmentStatus ?? (this.form.value.status as AppointmentStatus)
+      : this.form.value.status as AppointmentStatus;
+
     const payload = {
+      status,
       client_name: this.form.value.client_name,
       client_email: this.form.value.client_email || null,
       client_phone: '+569' + this.form.value.client_phone,
       service_id: Number(this.form.value.service_id),
       scheduled_at: new Date(`${this.form.value.date}T${this.form.value.time}:00`).toISOString(),
-      status: this.form.value.status as AppointmentStatus,
       notes: this.form.value.notes || null,
     };
 

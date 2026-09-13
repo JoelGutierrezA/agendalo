@@ -3,6 +3,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { PlatformService } from '../../features/platform-admin/services/platform.service';
 import { BusinessService } from '../../features/settings/services/business.service';
 import {
   BusinessSubscription,
@@ -18,6 +19,7 @@ interface NavItem {
   iconPath?: string;
   icon?: string;
   feature?: FeatureKey;
+  badge?: number;
 }
 
 @Component({
@@ -64,7 +66,12 @@ interface NavItem {
               } @else {
                 <span class="text-xl">{{ item.icon }}</span>
               }
-              <span>{{ item.label }}</span>
+              <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+              @if (item.badge) {
+                <span class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-bold text-white">
+                  {{ item.badge }}
+                </span>
+              }
             </a>
           }
         </nav>
@@ -138,7 +145,12 @@ interface NavItem {
                   } @else {
                     <span class="text-xl">{{ item.icon }}</span>
                   }
-                  <span>{{ item.label }}</span>
+                  <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+                  @if (item.badge) {
+                    <span class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-bold text-white">
+                      {{ item.badge }}
+                    </span>
+                  }
                 </a>
               }
             </nav>
@@ -347,6 +359,7 @@ export class AdminLayoutComponent implements OnInit {
     if (role === 'admin_platform') {
       return [
         { label: 'Dashboard Admin', iconPath: 'assets/Interfaz/Dashboard.png', route: '/admin-plataforma' },
+        { label: 'Solicitudes', iconPath: 'assets/Interfaz/Finanzas.png', route: '/admin-plataforma/solicitudes', badge: this.platformService.pendingRequestsCount() },
         { label: 'Usuarios', iconPath: 'assets/Interfaz/Clientes.png', route: '/admin-plataforma/usuarios' },
         { label: 'Configuración', iconPath: 'assets/Interfaz/Configuraci%C3%B3n.png', route: '/app/configuracion' },
       ];
@@ -409,6 +422,7 @@ export class AdminLayoutComponent implements OnInit {
     private authService: AuthService,
     private businessService: BusinessService,
     private subscriptionService: SubscriptionService,
+    private platformService: PlatformService,
     private router: Router
   ) {}
 
@@ -423,6 +437,8 @@ export class AdminLayoutComponent implements OnInit {
         next: subscription => this.showExpiryWarningOnce(subscription),
         error: () => undefined,
       });
+    } else {
+      this.platformService.getPendingRequestsCount().subscribe({ error: () => undefined });
     }
   }
 

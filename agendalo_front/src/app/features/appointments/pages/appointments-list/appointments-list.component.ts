@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import Swal from 'sweetalert2';
 import { ToastService } from '../../../../core/services/toast.service';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { AppointmentRow, AppointmentStatus, AppointmentsService } from '../../services/appointments.service';
@@ -138,13 +139,12 @@ import { SubscriptionService } from '../../../subscription/services/subscription
                           [ngModel]="apt.status"
                           (change)="updateStatus(apt, $event)"
                           title="Cambiar estado"
-                          [disabled]="statusUpdating === apt.id || !canOperate()"
+                          [disabled]="statusUpdating === apt.id || !canOperate() || isTerminalStatus(apt.status)"
                         >
-                          <option value="pending">Marcar pendiente</option>
-                          <option value="confirmed">Marcar confirmada</option>
-                          <option value="completed">Marcar completada</option>
-                          <option value="no_show">Marcar no asistió</option>
-                          <option value="cancelled">Cancelar cita</option>
+                          <option [value]="apt.status">{{ getStatusLabel(apt.status) }}</option>
+                          @for (status of statusTransitions(apt.status); track status) {
+                            <option [value]="status">{{ getStatusActionLabel(status) }}</option>
+                          }
                         </select>
 
                         @if (canOperate()) {
@@ -211,7 +211,9 @@ export class AppointmentsListComponent implements OnInit {
       return;
     }
 
-    if (newStatus === 'cancelled' && !confirm('¿Estás seguro de que deseas cancelar esta cita?')) {
+    if (newStatus === apt.status) return;
+
+    if (!await this.confirmStatusChange(newStatus)) {
       select.value = apt.status;
       return;
     }
@@ -235,6 +237,26 @@ export class AppointmentsListComponent implements OnInit {
     return this.subscriptionService.canOperate();
   }
 
+  statusTransitions(status: AppointmentStatus): AppointmentStatus[] {
+    return this.appointmentsService.getAllowedStatusTransitions(status);
+  }
+
+  isTerminalStatus(status: AppointmentStatus): boolean {
+    return this.appointmentsService.isTerminalStatus(status);
+  }
+
+  getStatusActionLabel(status: AppointmentStatus): string {
+    const labels: Record<AppointmentStatus, string> = {
+      pending: 'Marcar pendiente',
+      confirmed: 'Marcar confirmada',
+      completed: 'Marcar completada',
+      no_show: 'Marcar no asistió',
+      cancelled: 'Cancelar cita',
+    };
+
+    return labels[status];
+  }
+
   goToNewAppointment(): void {
     if (!this.assertOperationAllowed()) return;
     this.router.navigate(['/app/citas/nueva']);
@@ -245,6 +267,59 @@ export class AppointmentsListComponent implements OnInit {
 
     this.toastService.error('Tu suscripcion esta en periodo de gracia. Puedes consultar citas, pero debes renovar para realizar cambios.');
     return false;
+  }
+
+  private async confirmStatusChange(status: AppointmentStatus): Promise<boolean> {
+    const config = this.statusConfirmationConfig(status);
+    if (!config) return true;
+
+    const result = await Swal.fire({
+      title: config.title,
+      text: config.text,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: config.confirmButtonText,
+      cancelButtonText: config.cancelButtonText,
+      reverseButtons: true,
+    });
+
+    return result.isConfirmed;
+  }
+
+  private statusConfirmationConfig(status: AppointmentStatus): {
+    title: string;
+    text: string;
+    confirmButtonText: string;
+    cancelButtonText: string;
+  } | null {
+    if (status === 'completed') {
+      return {
+        title: '¿Marcar esta cita como completada?',
+        text: 'La cita quedará registrada como realizada y se generará el ingreso correspondiente al servicio.',
+        confirmButtonText: 'Sí, marcar como completada',
+        cancelButtonText: 'Cancelar',
+      };
+    }
+
+    if (status === 'no_show') {
+      return {
+        title: '¿Marcar que el cliente no asistió?',
+        text: 'La cita quedará cerrada con estado “No asistió” y no podrá cambiarse desde el selector de estado.',
+        confirmButtonText: 'Sí, marcar como no asistió',
+        cancelButtonText: 'Cancelar',
+      };
+    }
+
+    if (status === 'cancelled') {
+      return {
+        title: '¿Cancelar esta cita?',
+        text: 'La cita quedará cancelada y no podrá cambiarse después desde el selector de estado.',
+        confirmButtonText: 'Sí, cancelar cita',
+        cancelButtonText: 'Volver',
+      };
+    }
+
+    return null;
   }
 
   hasFilters(): boolean {

@@ -225,6 +225,14 @@ export const routes: Routes = [
           ),
         title: 'Usuarios - Skedia',
       },
+      {
+        path: 'solicitudes',
+        loadComponent: () =>
+          import('./features/platform-admin/pages/request-list/request-list.component').then(
+            m => m.RequestListComponent
+          ),
+        title: 'Solicitudes - Skedia',
+      },
     ],
   },
 
